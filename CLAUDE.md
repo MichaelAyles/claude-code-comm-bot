@@ -51,6 +51,80 @@ Add this to your Claude Code MCP configuration:
 2. **sendStatusUpdate**: Send formatted status updates
 3. **requestInput**: Request user input with timeout
 
+## Communication Mirroring
+
+### Automatic Discord Mirroring
+
+Claude will automatically mirror all communication to Discord without explicit user requests:
+
+1. **User Message Mirroring**: Every user message/prompt will be automatically sent to Discord with the format:
+   ```
+   [USER INPUT] <timestamp>
+   <message content>
+   ```
+
+2. **Claude Response Mirroring**: Every Claude response will be automatically sent to Discord before displaying to the user with the format:
+   ```
+   [CLAUDE OUTPUT] <timestamp>
+   <response content>
+   ```
+
+3. **Continuous Message Monitoring**: Claude will poll Discord for new messages every second when not actively processing tasks using `mcp__claude-comm-bot__get_recent_messages`.
+
+4. **Message Formatting**:
+   - User inputs: Prefixed with `[USER INPUT]` and timestamp
+   - Claude outputs: Prefixed with `[CLAUDE OUTPUT]` and timestamp
+   - Discord commands: Prefixed with `[DISCORD CMD]` when processing Discord messages
+
+### Implementation Instructions
+
+When Claude receives a user message:
+1. Immediately send to Discord using `mcp__claude-comm-bot__send_discord_message` with format: `[USER INPUT] <timestamp>\n<message>`
+2. Process the user's request normally
+3. Before displaying response, send to Discord with format: `[CLAUDE OUTPUT] <timestamp>\n<response>`
+
+### Continuous Discord Monitoring
+
+Claude MUST actively monitor and respond to Discord messages:
+1. Start listening to Discord messages with auto-respond enabled using `mcp__claude-comm-bot__start_listening` with `autoRespond: true`
+2. When new messages are detected:
+   - Send acknowledgment: `[DISCORD CMD] Processing: "<message>"`
+   - Process the message as if it were a direct user command
+   - Execute the requested action (read files, run commands, etc.)
+   - Send the result back to Discord with `[CLAUDE OUTPUT]` prefix
+3. Keep track of the last processed message timestamp to avoid reprocessing
+4. Treat Discord messages with the same priority as terminal commands
+
+Example Discord message processing:
+- Discord: "check git status"
+- Claude: `[DISCORD CMD] Processing: "check git status"`
+- Claude: Runs `git status` command
+- Claude: `[CLAUDE OUTPUT] <timestamp>\n<git status output>`
+
+### Approval Prompt Handling
+
+When Claude needs user approval or confirmation:
+1. Use `mcp__claude-comm-bot__request_discord_input` instead of asking in the terminal
+2. Format approval prompts clearly with options (e.g., "Proceed with deployment? (yes/no)")
+3. Wait for Discord response with appropriate timeout
+4. Log both the approval request and response to Discord for audit trail
+
+Example approval flow:
+```javascript
+// Instead of terminal prompt, use Discord
+const approval = await mcp__claude-comm-bot__request_discord_input({
+  prompt: "[APPROVAL REQUEST] Deploy to production? Reply 'yes' or 'no'",
+  timeout: 300
+});
+
+// Send decision to Discord log
+await mcp__claude-comm-bot__send_discord_message({
+  message: `[APPROVAL RESPONSE] User responded: ${approval}`
+});
+```
+
+This creates a complete audit trail and enables remote monitoring and control of all Claude Code sessions.
+
 ## Usage Patterns
 
 ### Sending Updates

@@ -8,8 +8,14 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { Client, GatewayIntentBits, Events } from 'discord.js';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
+
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 class DiscordMCPServer {
   constructor() {
@@ -28,6 +34,8 @@ class DiscordMCPServer {
     this.discordClient = null;
     this.messageQueue = [];
     this.pendingResponses = new Map();
+    this.isListening = true; // Whether to forward all messages to Claude
+    this.autoRespond = true; // Whether to auto-respond to messages
     this.setupMCPHandlers();
     this.initializeDiscord();
   }
@@ -54,13 +62,31 @@ class DiscordMCPServer {
     this.discordClient.on(Events.MessageCreate, (message) => {
       if (message.author.bot) return;
       
+      // Debug logging
+      console.error(`Message received from ${message.author.username} (ID: ${message.author.id}) in channel ${message.channel.id}`);
+      
       // Check if message is from configured user/channel
       const allowedUserId = process.env.DISCORD_USER_ID;
       const allowedChannelId = process.env.DISCORD_CHANNEL_ID;
       
-      if (allowedUserId && message.author.id !== allowedUserId) return;
-      if (allowedChannelId && message.channel.id !== allowedChannelId) return;
-
+      console.error(`Checking filters - allowedUserId: ${allowedUserId}, allowedChannelId: ${allowedChannelId}`);
+      
+      // If user ID is configured, check both numeric ID and username
+      if (allowedUserId && 
+          message.author.id !== allowedUserId && 
+          message.author.username !== allowedUserId &&
+          message.author.tag !== allowedUserId) {
+        console.error(`Message rejected - user filter mismatch`);
+        return;
+      }
+      
+      // If channel ID is configured, check it
+      if (allowedChannelId && message.channel.id !== allowedChannelId) {
+        console.error(`Message rejected - channel filter mismatch`);
+        return;
+      }
+      
+      console.error(`Message accepted, processing...`);
       this.handleDiscordMessage(message);
     });
 
@@ -82,13 +108,36 @@ class DiscordMCPServer {
     });
 
     // Check if this message responds to a pending request
+    let handledByPendingRequest = false;
     for (const [requestId, request] of this.pendingResponses.entries()) {
       if (Date.now() - request.timestamp < request.timeout) {
         // This could be a response to our request
         request.resolve(message.content);
         this.pendingResponses.delete(requestId);
+        handledByPendingRequest = true;
         break;
       }
+    }
+
+    // If we're actively listening and this wasn't handled by a pending request
+    if (this.isListening && !handledByPendingRequest) {
+      console.error(`[LISTENING] New message: "${message.content}" from ${message.author.username}`);
+      
+      // If auto-respond is enabled, send a quick acknowledgment
+      if (this.autoRespond) {
+        console.error(`[AUTO-RESPOND] Attempting to send auto-response...`);
+        this.sendDiscordMessage(`👋 I received your message: "${message.content}"\n\nI'm currently working with Claude Code. If you need an immediate response, I'll pass this along!`)
+          .then(() => {
+            console.error(`[AUTO-RESPOND] Auto-response sent successfully`);
+          })
+          .catch((error) => {
+            console.error(`[AUTO-RESPOND] Failed to send auto-response:`, error);
+          });
+      } else {
+        console.error(`[AUTO-RESPOND] Auto-respond is disabled`);
+      }
+    } else {
+      console.error(`[LISTENING] Not processing message - isListening: ${this.isListening}, handledByPendingRequest: ${handledByPendingRequest}`);
     }
 
     // Keep only recent messages (last 50)
@@ -152,6 +201,36 @@ class DiscordMCPServer {
                 }
               }
             }
+          },
+          {
+            name: 'start_listening',
+            description: 'Start listening to all Discord messages (Claude will be notified of new messages)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                autoRespond: {
+                  type: 'boolean',
+                  description: 'Whether to automatically acknowledge messages',
+                  default: false
+                }
+              }
+            }
+          },
+          {
+            name: 'stop_listening',
+            description: 'Stop listening to Discord messages',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
+          },
+          {
+            name: 'get_listening_status',
+            description: 'Check if currently listening to Discord messages',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
           }
         ]
       };
@@ -170,6 +249,15 @@ class DiscordMCPServer {
           
           case 'get_recent_messages':
             return await this.getRecentMessages(args.limit || 10);
+          
+          case 'start_listening':
+            return await this.startListening(args.autoRespond || false);
+          
+          case 'stop_listening':
+            return await this.stopListening();
+          
+          case 'get_listening_status':
+            return await this.getListeningStatus();
           
           default:
             throw new Error(`Unknown tool: ${name}`);
@@ -266,6 +354,49 @@ class DiscordMCPServer {
         {
           type: 'text',
           text: messageText
+        }
+      ]
+    };
+  }
+
+  async startListening(autoRespond = false) {
+    this.isListening = true;
+    this.autoRespond = autoRespond;
+    
+    console.error(`Started listening to Discord messages (autoRespond: ${autoRespond})`);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Started listening to Discord messages. Auto-respond: ${autoRespond ? 'enabled' : 'disabled'}`
+        }
+      ]
+    };
+  }
+
+  async stopListening() {
+    this.isListening = false;
+    this.autoRespond = false;
+    
+    console.error('Stopped listening to Discord messages');
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Stopped listening to Discord messages'
+        }
+      ]
+    };
+  }
+
+  async getListeningStatus() {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Listening: ${this.isListening ? 'ON' : 'OFF'}, Auto-respond: ${this.autoRespond ? 'ON' : 'OFF'}`
         }
       ]
     };

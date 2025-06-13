@@ -97,121 +97,19 @@ npm run test-discord
 - **Bot offline?** Check option 6 - verify your bot token is correct
 - **No debug output?** Make sure you're sending from the right Discord account/channel
 
-### Configuring Claude Code on macOS
+### Configuring Claude Code
 
-#### Step 1: Find Your Claude Code Configuration
-
-Claude Code stores MCP server configuration in one of these locations:
+Use the built-in `claude mcp add` command to configure this MCP server:
 
 ```bash
-# Primary location
-~/.config/claude-code/mcp_servers.json
-
-# Alternative locations
-~/.claude-code/mcp_servers.json
-~/.claude/mcp_servers.json
+claude mcp add claude-discord-bot \
+  --command node \
+  --args "src/index.js" \
+  --cwd "/Users/tribune/Desktop/Projects/claude-code-comm-bot" \
+  --env NODE_ENV=production
 ```
 
-#### Step 2: Check if Config Directory Exists
-
-```bash
-# Check if the directory exists
-ls -la ~/.config/claude-code/
-
-# If it doesn't exist, create it
-mkdir -p ~/.config/claude-code
-```
-
-#### Step 3: Create or Edit the MCP Configuration
-
-**If the file doesn't exist, create it:**
-```bash
-touch ~/.config/claude-code/mcp_servers.json
-```
-
-**Open the file in your preferred editor:**
-```bash
-# Using nano (beginner-friendly)
-nano ~/.config/claude-code/mcp_servers.json
-
-# Or using VSCode
-code ~/.config/claude-code/mcp_servers.json
-
-# Or using vim
-vim ~/.config/claude-code/mcp_servers.json
-```
-
-#### Step 4: Add the MCP Server Configuration
-
-**If the file is empty (new file), add this:**
-```json
-{
-  "mcpServers": {
-    "claude-discord-bot": {
-      "command": "node",
-      "args": ["src/index.js"],
-      "cwd": "/Users/tribune/Desktop/Projects/claude-code-comm-bot",
-      "env": {
-        "NODE_ENV": "production"
-      }
-    }
-  }
-}
-```
-
-**If you already have other MCP servers, add just the new entry:**
-```json
-{
-  "mcpServers": {
-    "existing-server": {
-      "command": "python",
-      "args": ["-m", "existing_server"]
-    },
-    "claude-discord-bot": {
-      "command": "node",
-      "args": ["src/index.js"],
-      "cwd": "/Users/tribune/Desktop/Projects/claude-code-comm-bot",
-      "env": {
-        "NODE_ENV": "production"
-      }
-    }
-  }
-}
-```
-
-#### Step 5: Update the Path
-
-**IMPORTANT:** Change the `cwd` path to your actual project location:
-
-```bash
-# Find your current directory
-cd /path/to/your/claude-code-discord-mcp
-pwd
-# Copy this output and use it as your "cwd" value
-```
-
-#### Step 6: Save and Restart Claude Code
-
-1. **Save the configuration file**
-   - In nano: `Ctrl+X`, then `Y`, then `Enter`
-   - In VSCode: `Cmd+S`
-   - In vim: `Esc`, then `:wq`, then `Enter`
-
-2. **Completely quit Claude Code** (`Cmd+Q`)
-3. **Wait 5 seconds** 
-4. **Restart Claude Code**
-
-#### Step 7: Verify the Integration
-
-When Claude Code starts, it should automatically start your Discord MCP server. You should now have access to these tools:
-- `send_discord_message` - Send messages to Discord
-- `request_discord_input` - Ask questions and wait for Discord replies
-- `get_recent_messages` - View recent Discord message history
-
-**Test it by asking Claude Code:**
-> "Send me a test message using the send_discord_message tool"
-
-You should receive the message in your configured Discord channel!
+After adding, restart Claude Code to activate the integration.
 
 ## Available MCP Tools
 
