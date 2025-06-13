@@ -6,195 +6,277 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { Client, GatewayIntentBits, Events } from 'discord.js';
 import dotenv from 'dotenv';
-import { createLogger } from './utils/logger.js';
-import { loadConfig } from './config/index.js';
-import { MessageRouter } from './platforms/router.js';
 
 dotenv.config();
 
-const logger = createLogger('MCP-Server');
-const config = loadConfig();
-const messageRouter = new MessageRouter(config, logger);
+class DiscordMCPServer {
+  constructor() {
+    this.server = new Server(
+      {
+        name: 'claude-code-discord-mcp',
+        version: '1.0.0',
+      },
+      {
+        capabilities: {
+          tools: {},
+        },
+      }
+    );
 
-const server = new Server(
-  {
-    name: 'claude-comm-bot',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
+    this.discordClient = null;
+    this.messageQueue = [];
+    this.pendingResponses = new Map();
+    this.setupMCPHandlers();
+    this.initializeDiscord();
   }
-);
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: 'sendMessage',
-        description: 'Send a message to configured chat platforms (Discord/Telegram)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            message: {
-              type: 'string',
-              description: 'The message to send',
-            },
-            platform: {
-              type: 'string',
-              enum: ['discord', 'telegram'],
-              description: 'Specific platform to send to (optional, defaults to all configured)',
-            },
-            urgent: {
-              type: 'boolean',
-              description: 'Mark message as urgent for special formatting (optional)',
-              default: false,
-            },
-          },
-          required: ['message'],
-        },
-      },
-      {
-        name: 'sendStatusUpdate',
-        description: 'Send a formatted status update with optional progress',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            status: {
-              type: 'string',
-              description: 'Current status description',
-            },
-            details: {
-              type: 'string',
-              description: 'Additional details about the status (optional)',
-            },
-            progress: {
-              type: 'number',
-              minimum: 0,
-              maximum: 100,
-              description: 'Progress percentage (0-100, optional)',
-            },
-          },
-          required: ['status'],
-        },
-      },
-      {
-        name: 'requestInput',
-        description: 'Request input from the user and wait for response',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            prompt: {
-              type: 'string',
-              description: 'The question/prompt to send to the user',
-            },
-            timeout: {
-              type: 'number',
-              description: 'Timeout in seconds (default: 300)',
-              default: 300,
-            },
-          },
-          required: ['prompt'],
-        },
-      },
-    ],
-  };
-});
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    switch (name) {
-      case 'sendMessage': {
-        const { message, platform, urgent = false } = args;
-        const result = await messageRouter.sendMessage(message, platform, urgent);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Message sent successfully to ${result.platforms.join(', ')}`,
-            },
-          ],
-        };
-      }
-
-      case 'sendStatusUpdate': {
-        const { status, details, progress } = args;
-        const result = await messageRouter.sendStatusUpdate(status, details, progress);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Status update sent to ${result.platforms.join(', ')}`,
-            },
-          ],
-        };
-      }
-
-      case 'requestInput': {
-        const { prompt, timeout = 300 } = args;
-        const result = await messageRouter.requestInput(prompt, timeout);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: result.response || 'No response received within timeout',
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+  async initializeDiscord() {
+    if (!process.env.DISCORD_BOT_TOKEN) {
+      console.error('DISCORD_BOT_TOKEN is required');
+      return;
     }
-  } catch (error) {
-    logger.error(`Tool execution error for ${name}:`, error);
+
+    this.discordClient = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.DirectMessages,
+      ]
+    });
+
+    this.discordClient.once(Events.ClientReady, (readyClient) => {
+      console.error(`Discord bot ready! Logged in as ${readyClient.user.tag}`);
+    });
+
+    this.discordClient.on(Events.MessageCreate, (message) => {
+      if (message.author.bot) return;
+      
+      // Check if message is from configured user/channel
+      const allowedUserId = process.env.DISCORD_USER_ID;
+      const allowedChannelId = process.env.DISCORD_CHANNEL_ID;
+      
+      if (allowedUserId && message.author.id !== allowedUserId) return;
+      if (allowedChannelId && message.channel.id !== allowedChannelId) return;
+
+      this.handleDiscordMessage(message);
+    });
+
+    try {
+      await this.discordClient.login(process.env.DISCORD_BOT_TOKEN);
+    } catch (error) {
+      console.error('Failed to login to Discord:', error);
+    }
+  }
+
+  handleDiscordMessage(message) {
+    // Store message for potential response matching
+    this.messageQueue.push({
+      id: message.id,
+      content: message.content,
+      author: message.author.username,
+      timestamp: Date.now(),
+      channel: message.channel.id
+    });
+
+    // Check if this message responds to a pending request
+    for (const [requestId, request] of this.pendingResponses.entries()) {
+      if (Date.now() - request.timestamp < request.timeout) {
+        // This could be a response to our request
+        request.resolve(message.content);
+        this.pendingResponses.delete(requestId);
+        break;
+      }
+    }
+
+    // Keep only recent messages (last 50)
+    if (this.messageQueue.length > 50) {
+      this.messageQueue = this.messageQueue.slice(-50);
+    }
+  }
+
+  setupMCPHandlers() {
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      return {
+        tools: [
+          {
+            name: 'send_discord_message',
+            description: 'Send a message to Discord channel or user',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                message: {
+                  type: 'string',
+                  description: 'The message to send'
+                },
+                urgent: {
+                  type: 'boolean',
+                  description: 'Whether this is an urgent message (affects formatting)',
+                  default: false
+                }
+              },
+              required: ['message']
+            }
+          },
+          {
+            name: 'request_discord_input',
+            description: 'Send a message and wait for user response',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                prompt: {
+                  type: 'string',
+                  description: 'The prompt/question to ask the user'
+                },
+                timeout: {
+                  type: 'number',
+                  description: 'Timeout in seconds to wait for response',
+                  default: 300
+                }
+              },
+              required: ['prompt']
+            }
+          },
+          {
+            name: 'get_recent_messages',
+            description: 'Get recent Discord messages from the user',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                limit: {
+                  type: 'number',
+                  description: 'Number of recent messages to retrieve',
+                  default: 10
+                }
+              }
+            }
+          }
+        ]
+      };
+    });
+
+    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      const { name, arguments: args } = request.params;
+
+      try {
+        switch (name) {
+          case 'send_discord_message':
+            return await this.sendDiscordMessage(args.message, args.urgent);
+          
+          case 'request_discord_input':
+            return await this.requestDiscordInput(args.prompt, args.timeout || 300);
+          
+          case 'get_recent_messages':
+            return await this.getRecentMessages(args.limit || 10);
+          
+          default:
+            throw new Error(`Unknown tool: ${name}`);
+        }
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: ${error.message}`
+            }
+          ],
+          isError: true
+        };
+      }
+    });
+  }
+
+  async sendDiscordMessage(message, urgent = false) {
+    if (!this.discordClient || !this.discordClient.isReady()) {
+      throw new Error('Discord client not ready');
+    }
+
+    const channelId = process.env.DISCORD_CHANNEL_ID;
+    const userId = process.env.DISCORD_USER_ID;
+
+    let target;
+    if (channelId) {
+      target = await this.discordClient.channels.fetch(channelId);
+    } else if (userId) {
+      const user = await this.discordClient.users.fetch(userId);
+      target = await user.createDM();
+    } else {
+      throw new Error('No DISCORD_CHANNEL_ID or DISCORD_USER_ID configured');
+    }
+
+    const formattedMessage = urgent ? `🚨 **URGENT**: ${message}` : message;
+    
+    await target.send(formattedMessage);
+
     return {
       content: [
         {
           type: 'text',
-          text: `Error: ${error.message}`,
-        },
-      ],
-      isError: true,
+          text: `Message sent to Discord: ${message}`
+        }
+      ]
     };
   }
-});
 
-async function main() {
-  try {
-    logger.info('Starting Claude Code Communication Bot MCP Server...');
+  async requestDiscordInput(prompt, timeoutSeconds = 300) {
+    // First send the prompt
+    await this.sendDiscordMessage(prompt);
+
+    // Wait for response
+    const requestId = Date.now().toString();
+    const timeoutMs = timeoutSeconds * 1000;
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingResponses.delete(requestId);
+        reject(new Error(`Timeout waiting for Discord response after ${timeoutSeconds}s`));
+      }, timeoutMs);
+
+      this.pendingResponses.set(requestId, {
+        timestamp: Date.now(),
+        timeout: timeoutMs,
+        resolve: (response) => {
+          clearTimeout(timeout);
+          resolve({
+            content: [
+              {
+                type: 'text',
+                text: `User responded: ${response}`
+              }
+            ]
+          });
+        }
+      });
+    });
+  }
+
+  async getRecentMessages(limit = 10) {
+    const recentMessages = this.messageQueue.slice(-limit);
     
-    await messageRouter.initialize();
-    logger.info('Message router initialized successfully');
+    const messageText = recentMessages.length > 0
+      ? recentMessages.map(msg => 
+          `[${new Date(msg.timestamp).toISOString()}] ${msg.author}: ${msg.content}`
+        ).join('\n')
+      : 'No recent messages';
 
+    return {
+      content: [
+        {
+          type: 'text',
+          text: messageText
+        }
+      ]
+    };
+  }
+
+  async run() {
     const transport = new StdioServerTransport();
-    await server.connect(transport);
-    
-    logger.info('MCP Server started successfully');
-    logger.info(`Configured platforms: ${Object.keys(config.platforms).join(', ')}`);
-  } catch (error) {
-    logger.error('Failed to start MCP server:', error);
-    process.exit(1);
+    await this.server.connect(transport);
+    console.error('Claude Code Discord MCP Server running');
   }
 }
 
-process.on('SIGINT', async () => {
-  logger.info('Shutting down MCP server...');
-  await messageRouter.cleanup();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down MCP server...');
-  await messageRouter.cleanup();
-  process.exit(0);
-});
-
-main().catch((error) => {
-  logger.error('Unhandled error:', error);
-  process.exit(1);
-});
+const server = new DiscordMCPServer();
+server.run().catch(console.error);

@@ -36,7 +36,7 @@ Add this to your Claude Code MCP configuration:
     "claude-comm-bot": {
       "command": "node",
       "args": ["src/index.js"],
-      "cwd": "/Users/tribune/Desktop/Projects/claude-code-comm-bot",
+      "cwd": "/path/to/your/claude-code-comm-bot",
       "env": {
         "NODE_ENV": "production"
       }

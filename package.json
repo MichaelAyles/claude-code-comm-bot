@@ -1,50 +1,22 @@
 {
-  "name": "claude-code-comm-bot",
+  "name": "claude-code-discord-mcp",
   "version": "1.0.0",
-  "description": "MCP server for Claude Code communication via Discord and Telegram",
+  "description": "MCP server for Claude Code that integrates with Discord bot for messaging",
   "main": "src/index.js",
-  "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon --exec node src/index.js",
-    "build": "tsc",
-    "test": "node --test test/**/*.test.js",
-    "lint": "eslint src/**/*.js",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "dev": "node --watch src/index.js",
+    "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": [
-    "mcp",
-    "claude-code",
-    "discord",
-    "telegram",
-    "bot",
-    "communication"
-  ],
-  "author": "Claude Code User",
+  "keywords": ["mcp", "claude-code", "discord", "bot"],
+  "author": "",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.0",
+    "@modelcontextprotocol/sdk": "^0.4.0",
     "discord.js": "^14.14.1",
-    "node-telegram-bot-api": "^0.64.0",
-    "dotenv": "^16.3.1",
-    "winston": "^3.11.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.10.4",
-    "eslint": "^8.56.0",
-    "nodemon": "^3.0.2",
-    "typescript": "^5.3.3"
+    "dotenv": "^16.3.1"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/yourusername/claude-code-comm-bot.git"
-  },
-  "bugs": {
-    "url": "https://github.com/yourusername/claude-code-comm-bot/issues"
-  },
-  "homepage": "https://github.com/yourusername/claude-code-comm-bot#readme"
+  }
 }
