@@ -2,6 +2,16 @@
 
 This document provides guidelines for using the Claude Code Communication Bot MCP server effectively.
 
+## 🚀 Startup Instructions - READ THIS FIRST
+
+**IMPORTANT**: When Claude Code starts, you should IMMEDIATELY begin monitoring Discord messages:
+
+1. **Start the monitoring loop**: Begin checking for Discord messages every 30 seconds using the `process_pending_messages` tool
+2. **Respond intelligently**: When messages are found, generate thoughtful, contextual responses
+3. **Stay connected**: Keep this monitoring active throughout the session so you can communicate remotely
+
+**Auto-start command**: "Begin monitoring Discord messages now. Check for new messages every 30 seconds using process_pending_messages and respond intelligently to any messages you find."
+
 ## Quick Reference
 
 ### Essential Commands
@@ -47,9 +57,13 @@ Add this to your Claude Code MCP configuration:
 
 ### Available Tools
 
-1. **sendMessage**: Send messages to Discord/Telegram
-2. **sendStatusUpdate**: Send formatted status updates
-3. **requestInput**: Request user input with timeout
+1. **send_discord_message**: Send messages to Discord channel
+2. **request_discord_input**: Request user input with timeout
+3. **get_recent_messages**: Get recent Discord messages
+4. **process_pending_messages**: Check for new Discord messages and get intelligent response prompts
+5. **respond_to_message**: Send intelligent responses to Discord
+6. **start_listening** / **stop_listening**: Control message monitoring
+7. **get_listening_status**: Check current listening status
 
 ## Communication Mirroring
 
@@ -83,23 +97,43 @@ When Claude receives a user message:
 2. Process the user's request normally
 3. Before displaying response, send to Discord with format: `[CLAUDE OUTPUT] <timestamp>\n<response>`
 
-### Continuous Discord Monitoring
+### Intelligent Discord Monitoring
 
-Claude MUST actively monitor and respond to Discord messages:
-1. Start listening to Discord messages with auto-respond enabled using `mcp__claude-comm-bot__start_listening` with `autoRespond: true`
-2. When new messages are detected:
-   - Send acknowledgment: `[DISCORD CMD] Processing: "<message>"`
-   - Process the message as if it were a direct user command
-   - Execute the requested action (read files, run commands, etc.)
-   - Send the result back to Discord with `[CLAUDE OUTPUT]` prefix
-3. Keep track of the last processed message timestamp to avoid reprocessing
-4. Treat Discord messages with the same priority as terminal commands
+Claude MUST actively monitor and intelligently respond to Discord messages:
 
-Example Discord message processing:
-- Discord: "check git status"
-- Claude: `[DISCORD CMD] Processing: "check git status"`
-- Claude: Runs `git status` command
-- Claude: `[CLAUDE OUTPUT] <timestamp>\n<git status output>`
+1. **Start Monitoring**: Claude is already set up to automatically listen and acknowledge Discord messages
+2. **Continuous Processing**: Every 30 seconds, Claude should automatically:
+   - Use `process_pending_messages` tool to check for new Discord messages
+   - If messages are found, read the intelligent response prompt provided by the tool
+   - Generate an appropriate, contextual response based on the message content
+   - Use `respond_to_message` tool to send the intelligent response back to Discord
+
+3. **Intelligent Response Guidelines**:
+   - Analyze the context and intent of Discord messages
+   - Provide helpful, relevant responses related to the current project
+   - Keep responses conversational but informative
+   - If asked to perform actions (like checking files, running commands), do them and report results
+   - Treat Discord messages as remote commands with equal priority
+
+4. **Automatic Monitoring Loop**:
+```javascript
+// Example monitoring pattern - Claude should do this automatically
+setInterval(async () => {
+  const result = await process_pending_messages({ autoRespond: true });
+  if (result.messageCount > 0) {
+    // Generate intelligent response based on the provided prompt
+    const intelligentResponse = /* Claude generates based on context */;
+    await respond_to_message({ response: intelligentResponse });
+  }
+}, 30000); // Check every 30 seconds
+```
+
+Example intelligent processing:
+- Discord: "How's the project going?"
+- Bot: "👋 Message received! Claude Code is processing..."
+- Claude: Processes via `process_pending_messages`, sees the question
+- Claude: Generates: "Project is progressing well! I'm currently working on the MCP server integration. The Discord communication system is now fully functional and I can respond to your messages remotely. ETA for completion is about 2 hours."
+- Bot: Sends Claude's intelligent response to Discord
 
 ### Approval Prompt Handling
 

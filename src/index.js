@@ -34,8 +34,11 @@ class DiscordMCPServer {
     this.discordClient = null;
     this.messageQueue = [];
     this.pendingResponses = new Map();
+    this.pendingNotifications = []; // New messages waiting for Claude Code to process
     this.isListening = true; // Whether to forward all messages to Claude
     this.autoRespond = true; // Whether to auto-respond to messages
+    this.autoProcessing = false; // Whether to automatically process new messages
+    this.processingInterval = null; // Timer for auto-processing
     this.setupMCPHandlers();
     this.initializeDiscord();
   }
@@ -123,10 +126,22 @@ class DiscordMCPServer {
     if (this.isListening && !handledByPendingRequest) {
       console.error(`[LISTENING] New message: "${message.content}" from ${message.author.username}`);
       
+      // Add to notification queue for Claude Code to process
+      this.pendingNotifications.push({
+        id: message.id,
+        content: message.content,
+        author: message.author.username,
+        authorId: message.author.id,
+        timestamp: Date.now(),
+        channel: message.channel.id,
+        needsResponse: true
+      });
+      console.error(`[NOTIFICATIONS] Added message to notification queue. Queue size: ${this.pendingNotifications.length}`);
+      
       // If auto-respond is enabled, send a quick acknowledgment
       if (this.autoRespond) {
         console.error(`[AUTO-RESPOND] Attempting to send auto-response...`);
-        this.sendDiscordMessage(`👋 I received your message: "${message.content}"\n\nI'm currently working with Claude Code. If you need an immediate response, I'll pass this along!`)
+        this.sendDiscordMessage(``)
           .then(() => {
             console.error(`[AUTO-RESPOND] Auto-response sent successfully`);
           })
@@ -231,6 +246,79 @@ class DiscordMCPServer {
               type: 'object',
               properties: {}
             }
+          },
+          {
+            name: 'check_new_messages',
+            description: 'Check for new Discord messages that need processing',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                markAsRead: {
+                  type: 'boolean',
+                  description: 'Whether to mark messages as read after retrieving',
+                  default: true
+                }
+              }
+            }
+          },
+          {
+            name: 'respond_to_message',
+            description: 'Send a response to a specific Discord message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                response: {
+                  type: 'string',
+                  description: 'The response message to send'
+                },
+                messageId: {
+                  type: 'string',
+                  description: 'ID of the message being responded to (optional)'
+                }
+              },
+              required: ['response']
+            }
+          },
+          {
+            name: 'enable_auto_processing',
+            description: 'Enable automatic processing of Discord messages (Claude Code will auto-respond)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                intervalSeconds: {
+                  type: 'number',
+                  description: 'How often to check for new messages (default: 5 seconds)',
+                  default: 5
+                },
+                responseTemplate: {
+                  type: 'string',
+                  description: 'Template for auto-responses (optional)',
+                  default: 'I received your message and will respond shortly!'
+                }
+              }
+            }
+          },
+          {
+            name: 'disable_auto_processing',
+            description: 'Disable automatic processing of Discord messages',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
+          },
+          {
+            name: 'process_pending_messages',
+            description: 'Check for new Discord messages and return them for intelligent processing by Claude Code',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                autoRespond: {
+                  type: 'boolean',
+                  description: 'Whether to automatically send generated responses to Discord',
+                  default: true
+                }
+              }
+            }
           }
         ]
       };
@@ -259,6 +347,15 @@ class DiscordMCPServer {
           case 'get_listening_status':
             return await this.getListeningStatus();
           
+          case 'check_new_messages':
+            return await this.checkNewMessages(args.markAsRead !== false);
+          
+          case 'respond_to_message':
+            return await this.respondToMessage(args.response, args.messageId);
+          
+          case 'process_pending_messages':
+            return await this.processPendingMessages(args.autoRespond !== false);
+          
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -277,26 +374,38 @@ class DiscordMCPServer {
   }
 
   async sendDiscordMessage(message, urgent = false) {
+    console.error(`[SEND] Starting sendDiscordMessage - urgent: ${urgent}`);
+    
     if (!this.discordClient || !this.discordClient.isReady()) {
+      console.error(`[SEND] Discord client not ready - client: ${!!this.discordClient}, ready: ${this.discordClient?.isReady()}`);
       throw new Error('Discord client not ready');
     }
 
     const channelId = process.env.DISCORD_CHANNEL_ID;
     const userId = process.env.DISCORD_USER_ID;
+    
+    console.error(`[SEND] Config - channelId: ${channelId}, userId: ${userId}`);
 
     let target;
     if (channelId) {
+      console.error(`[SEND] Fetching channel: ${channelId}`);
       target = await this.discordClient.channels.fetch(channelId);
+      console.error(`[SEND] Channel fetched successfully: ${target?.name || target?.id}`);
     } else if (userId) {
+      console.error(`[SEND] Fetching user: ${userId}`);
       const user = await this.discordClient.users.fetch(userId);
       target = await user.createDM();
+      console.error(`[SEND] DM created successfully`);
     } else {
+      console.error(`[SEND] No DISCORD_CHANNEL_ID or DISCORD_USER_ID configured`);
       throw new Error('No DISCORD_CHANNEL_ID or DISCORD_USER_ID configured');
     }
 
     const formattedMessage = urgent ? `🚨 **URGENT**: ${message}` : message;
     
+    console.error(`[SEND] Sending message: "${formattedMessage}"`);
     await target.send(formattedMessage);
+    console.error(`[SEND] Message sent successfully`);
 
     return {
       content: [
@@ -396,9 +505,107 @@ class DiscordMCPServer {
       content: [
         {
           type: 'text',
-          text: `Listening: ${this.isListening ? 'ON' : 'OFF'}, Auto-respond: ${this.autoRespond ? 'ON' : 'OFF'}`
+          text: `Listening: ${this.isListening ? 'ON' : 'OFF'}, Auto-respond: ${this.autoRespond ? 'ON' : 'OFF'}, Pending notifications: ${this.pendingNotifications.length}`
         }
       ]
+    };
+  }
+
+  async checkNewMessages(markAsRead = true) {
+    const notifications = [...this.pendingNotifications];
+    
+    if (markAsRead) {
+      this.pendingNotifications = [];
+      console.error(`[NOTIFICATIONS] Cleared ${notifications.length} notifications`);
+    }
+    
+    if (notifications.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'No new Discord messages'
+          }
+        ]
+      };
+    }
+    
+    const messageText = `📨 ${notifications.length} new Discord message${notifications.length > 1 ? 's' : ''}:\n\n` +
+      notifications.map(msg => 
+        `**From ${msg.author}** (${new Date(msg.timestamp).toLocaleTimeString()}):\n"${msg.content}"\n`
+      ).join('\n');
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: messageText
+        }
+      ]
+    };
+  }
+
+  async respondToMessage(response, messageId = null) {
+    const result = await this.sendDiscordMessage(response);
+    
+    // If this was in response to a specific message, mark any related notifications as handled
+    if (messageId) {
+      this.pendingNotifications = this.pendingNotifications.filter(notif => notif.id !== messageId);
+      console.error(`[NOTIFICATIONS] Removed notification for message ${messageId}`);
+    }
+    
+    return result;
+  }
+
+  async processPendingMessages(autoRespond = true) {
+    if (this.pendingNotifications.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'No pending Discord messages to process.'
+          }
+        ]
+      };
+    }
+
+    const notifications = [...this.pendingNotifications];
+    this.pendingNotifications = []; // Clear the queue
+    
+    console.error(`[SMART-PROCESSING] Processing ${notifications.length} pending messages`);
+
+    // Format messages for Claude Code to process
+    const messageContext = notifications.map(msg => 
+      `**Message from ${msg.author}** (${new Date(msg.timestamp).toLocaleString()}):\n"${msg.content}"`
+    ).join('\n\n');
+
+    const prompt = `📱 **New Discord Messages Received** 📱
+
+${messageContext}
+
+Please generate an intelligent, helpful response to ${notifications.length > 1 ? 'these messages' : 'this message'}. Consider:
+- Who sent the message and the context
+- What they might need help with
+- Your current status/what you're working on
+- An appropriate tone (friendly but professional)
+
+${autoRespond ? 'Your response will be automatically sent to Discord.' : 'Please provide a response that can be sent to Discord.'}`;
+
+    // Return the prompt for Claude Code to process
+    return {
+      content: [
+        {
+          type: 'text',
+          text: prompt
+        }
+      ],
+      // Include metadata for follow-up actions
+      _metadata: {
+        messageCount: notifications.length,
+        autoRespond: autoRespond,
+        messageIds: notifications.map(n => n.id),
+        lastMessage: notifications[notifications.length - 1]
+      }
     };
   }
 
