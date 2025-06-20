@@ -7,7 +7,7 @@ src/**
 .env.example
 tsconfig.json
 .eslintrc.json
-node_modules/**
+# node_modules/** - commented out to include dependencies
 npm-debug.log
 *.vsix
 .claude/**
