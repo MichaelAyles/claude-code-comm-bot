@@ -10,6 +10,10 @@ A VS Code extension that integrates Claude AI chat with Discord notifications fo
 - **Usage Tracking**: Monitor token usage and cost projections
 - **Command System**: Built-in commands for configuration and control
 
+## 📸 Screenshot
+
+![Claude Discord Chat Extension](public/screenshots/Screenshot%202025-06-20%20at%2015.21.25.png)
+
 ## 📦 Installation
 
 ### From VSIX file
