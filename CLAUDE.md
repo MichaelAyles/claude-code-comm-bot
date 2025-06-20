@@ -1,223 +1,116 @@
-# Claude Discord Chat - VS Code Extension Guidelines
+# Claude Code System Instructions for claude-discord-chat Extension
 
-This document provides guidelines for developing and using the Claude Discord Chat VS Code extension.
+## Project Overview
 
-## 📌 Current Version: 0.1.4
+You are working on a VS Code extension called "Claude Discord Chat" that integrates Claude AI chat functionality with Discord notifications. The extension allows users to chat with Claude directly in VS Code while mirroring conversations to Discord for remote monitoring.
 
-### What's New in v0.1.4
-- **Improved project structure**: Cleaned up repository and removed unused files
-- **GitHub Actions**: Added automated release workflow for publishing to GitHub releases
-- **Release tooling**: Added release scripts for easier version management
-- **Updated documentation**: Completely rewrote CLAUDE.md to reflect actual VS Code extension functionality
-- **Build improvements**: Added .gitignore entries for build artifacts (out/, *.vsix)
+## Key Technical Details
 
-### Previous Updates (v0.1.3)
-- **Version display**: Welcome message now shows current version number
-- **Simplified /config command**: Step-by-step Discord setup wizard
-- **Improved messaging**: Cleaner Discord message formatting
-- **Build documentation**: Added clear instructions for building and packaging
+### Architecture
+- **ClaudeService**: Manages Claude AI sessions and API communication
+- **DiscordService**: Handles Discord bot connection and message mirroring
+- **ChatProvider**: Provides the webview-based chat interface in VS Code
 
-## 🔧 Development Requirements
+### Important Files
+- `src/extension.ts`: Main extension entry point
+- `src/claude/ClaudeService.ts`: Claude AI integration
+- `src/discord/DiscordService.ts`: Discord bot functionality
+- `src/webview/ChatProvider.ts`: Chat UI and command handling
+- `package.json`: Extension manifest and configuration
 
-**IMPORTANT**: When building and packaging the VS Code extension:
+### Current Version
+The extension is currently at version 0.1.6. Always increment the version in package.json when making releases.
 
-1. **Auto-increment version**: Always increment the version number in `package.json` for each build
-2. **Update CLAUDE.md**: Update this document with the current version and any changes
-3. **Version display**: The welcome message must display the current version number so users know they're running the latest build
-4. **Build process**: Use `npm run compile && npm run package` to build the VSIX file
-5. **GitHub Releases**: Upload VSIX files to GitHub releases, not the repository
+## Development Guidelines
 
-## 🚀 Quick Start
+### Code Style
+- Use TypeScript for all code
+- Follow existing patterns in the codebase
+- Use async/await for asynchronous operations
+- Handle errors gracefully with try/catch blocks
+- Add proper type annotations
 
-### Installation
+### VS Code Extension Best Practices
+- Use the VS Code API correctly (vscode namespace)
+- Dispose of resources properly to prevent memory leaks
+- Store sensitive data (like Discord tokens) in VS Code configuration
+- Use webviews for complex UI (already implemented in ChatProvider)
+- Follow VS Code extension activation best practices
 
-1. **From VSIX file**: 
-   - Download the latest `.vsix` file from [GitHub Releases](https://github.com/MichaelAyles/claude-code-comm-bot/releases)
-   - In VS Code: `Cmd+Shift+P` → "Install from VSIX" → Select the file
+### Discord Integration
+- Discord bot tokens should NEVER be hardcoded or committed
+- Use discord.js v14 patterns (already in dependencies)
+- Handle Discord connection errors gracefully
+- Implement proper reconnection logic
+- Filter messages appropriately based on channel/user IDs
 
-2. **From Source**:
-   ```bash
-   npm install
-   npm run compile
-   npm run package
-   ```
+### User Experience
+- Provide clear error messages
+- Include helpful command suggestions (like /config)
+- Show connection status in the UI
+- Make the Discord setup wizard user-friendly
+- Display version number in welcome messages
 
-### Basic Setup
-
-1. Open VS Code Command Palette (`Cmd+Shift+P`)
-2. Run "Claude Discord Chat: Open Chat"
-3. Type `/config` to set up Discord integration
-4. Start chatting with Claude!
-
-## 💬 Available Commands
-
-### Chat Commands
-- `/help` - Show all available commands
-- `/config` or `/setup` - Discord configuration wizard
-- `/status` - Show connection status
-- `/stop` - Stop current Claude request
-- `/new` or `/newsession` - Start new Claude session
-- `/session` - Show current session info
-- `/limits` or `/cost` - Show usage limits and cost projections
-
-### VS Code Commands
-- `claude-discord-chat.openChat` - Open the chat panel
-- `claude-discord-chat.sendMessage` - Send a message to Claude
-
-## 🔌 Discord Integration
-
-### Setup Steps
-
-1. **Create Discord Bot**:
-   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
-   - Create new application → Bot section → Reset Token
-   - Enable "Message Content Intent"
-
-2. **Configure Extension**:
-   - VS Code Settings (`Cmd+,`) → Search "discord bot"
-   - Add bot token, channel ID, and user ID
-   - Enable Discord integration
-
-3. **Invite Bot to Server**:
-   - OAuth2 → URL Generator → Select "bot" scope
-   - Permissions: Send Messages, Read Message History, View Channel
-
-### Features
-
-- **Auto-mirroring**: Sync all Claude conversations to Discord
-- **Remote monitoring**: View Claude's responses in Discord
-- **Message filtering**: Filter by channel or user ID
-- **Status indicators**: Real-time connection status
-
-## 🏗️ Architecture
-
-### Project Structure
-```
-claude-discord-chat/
-├── src/
-│   ├── extension.ts         # VS Code extension entry point
-│   ├── claude/
-│   │   └── ClaudeService.ts # Claude AI integration
-│   ├── discord/
-│   │   └── DiscordService.ts # Discord bot integration
-│   └── webview/
-│       └── ChatProvider.ts   # Chat UI provider
-├── out/                     # Compiled JavaScript (gitignored)
-├── package.json             # Extension manifest
-└── tsconfig.json           # TypeScript configuration
-```
-
-### Key Components
-
-1. **ClaudeService**: Manages Claude AI sessions and communication
-2. **DiscordService**: Handles Discord bot connection and messaging
-3. **ChatProvider**: Provides the webview-based chat interface
-
-## 🛠️ Development
+## Build and Release Process
 
 ### Building
 ```bash
-# Install dependencies
-npm install
-
-# Compile TypeScript
-npm run compile
-
-# Watch mode for development
-npm run watch
-
-# Package extension
-npm run package
+npm run compile     # Compile TypeScript
+npm run package     # Create VSIX file
 ```
 
 ### Testing
 ```bash
-# Run linter
-npm run lint
-
-# Type checking
-npm run typecheck
-
-# Open VS Code with extension loaded
-Press F5 in VS Code
+npm run lint        # Run linter
+npm run typecheck   # Type checking
+# Press F5 in VS Code to test
 ```
 
-### Debugging
+### Release Process
+1. Update version in package.json
+2. Update CLAUDE.md if needed
+3. Build: `npm run compile && npm run package`
+4. Test the VSIX locally
+5. Commit changes
+6. Create git tag: `git tag v0.1.X`
+7. Push tag to trigger GitHub Actions
 
-1. Open project in VS Code
-2. Set breakpoints in TypeScript files
-3. Press F5 to launch Extension Development Host
-4. Use Debug Console for output
+### GitHub Actions
+The project uses GitHub Actions for automated releases. The workflow:
+- Triggers on version tags (v*.*.*)
+- Builds the extension
+- Runs tests with xvfb-run for headless VS Code testing
+- Creates GitHub release with VSIX file
+- Requires write permissions for releases
 
-## 📦 Release Process
+## Common Issues and Solutions
 
-1. **Update version** in `package.json`
-2. **Update CLAUDE.md** with changes
-3. **Build and test**: `npm run compile && npm run package`
-4. **Create GitHub Release**:
-   - Tag with version (e.g., `v0.1.4`)
-   - Upload VSIX file
-   - Add release notes
+### CI/Build Issues
+- Use `npx vsce package` to ensure vsce is found
+- Add `permissions: contents: write` to GitHub Actions for releases
+- Use `xvfb-run -a npm test` for VS Code tests in CI
 
-### Automated Releases
-```bash
-# Use the release script
-npm run release
+### Extension Issues
+- Always check VS Code version compatibility (requires ^1.95.0)
+- Ensure all dependencies are properly installed
+- Check for proper disposal of resources
+- Verify Discord bot has correct permissions
 
-# Or quick releases
-npm run release:patch
-npm run release:minor
-npm run release:major
-```
+## Security Considerations
 
-## 🔒 Security Best Practices
-
-- Never commit Discord bot tokens
-- Use VS Code settings for sensitive configuration
+- Never commit Discord bot tokens or API keys
+- Use VS Code's configuration API for sensitive data
 - Validate all user inputs
-- Sanitize Discord messages before display
+- Sanitize messages before displaying in webview
+- Follow VS Code security best practices
 
-## 🐛 Troubleshooting
+## Future Improvements
 
-### Common Issues
+When implementing new features:
+- Maintain backward compatibility
+- Update documentation (README.md)
+- Add user-facing commands to package.json
+- Consider performance impact
+- Test on multiple VS Code versions
 
-1. **Discord not connecting**: Check bot token and permissions
-2. **Claude not responding**: Verify API availability
-3. **Extension not loading**: Check VS Code version compatibility
-
-### Debug Mode
-
-Enable detailed logging:
-1. VS Code Settings → "Claude Discord Chat: Debug Mode" → Enable
-2. View logs in Output panel → "Claude Discord Chat"
-
-## 📈 Usage Tracking
-
-The extension tracks token usage to help you monitor costs:
-
-- **Session tracking**: Per-session token counts
-- **Cost calculation**: Based on current Claude API pricing
-- **Projections**: Daily/monthly cost estimates
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Built for Claude Code users
-- Powered by Claude AI API
-- Discord.js for bot functionality
-- VS Code Extension API
-
----
-
-For issues or questions, please open an issue on [GitHub](https://github.com/MichaelAyles/claude-code-comm-bot/issues).
+Remember: This is a VS Code extension, not a standalone application. Always work within VS Code's extension framework and guidelines.
