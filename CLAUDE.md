@@ -2,6 +2,15 @@
 
 This document provides guidelines for using the Claude Code Communication Bot MCP server effectively.
 
+## 🔧 Development Requirements
+
+**IMPORTANT**: When building and packaging the VS Code extension:
+
+1. **Auto-increment version**: Always increment the version number in `package.json` for each build
+2. **Update CLAUDE.md**: Update this document with the current version and any changes
+3. **Version display**: The welcome message must display the current version number so users know they're running the latest build
+4. **Build process**: Use `npm run compile && npm run package` to build the VSIX file
+
 ## 🚀 Startup Instructions - READ THIS FIRST
 
 **IMPORTANT**: When Claude Code starts, you should IMMEDIATELY begin monitoring Discord messages:

@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatProvider = void 0;
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
 class ChatProvider {
     _extensionUri;
     _discordService;
@@ -398,21 +399,39 @@ ${!enabled || !hasToken ? '\n⚠️ Run `/config` to set up Discord integration'
 ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot token and permissions' : ''}`);
     }
     addMessage(type, content) {
+        // Clean up excessive whitespace while preserving intentional formatting
+        const cleanContent = content
+            .replace(/\n{3,}/g, '\n\n') // Replace 3+ newlines with double newlines
+            .replace(/^\s+|\s+$/g, '') // Trim leading/trailing whitespace
+            .replace(/[ \t]+$/gm, '') // Remove trailing spaces on each line
+            .replace(/\n\s*\n\s*\n/g, '\n\n'); // Clean up lines with only whitespace
         const message = {
             type,
-            content,
+            content: cleanContent,
             timestamp: new Date()
         };
         this.messages.push(message);
         this.sendToWebview({
             type: 'message',
             messageType: type,
-            content: content,
+            content: cleanContent,
             timestamp: message.timestamp.toLocaleTimeString()
         });
     }
     sendToWebview(data) {
         this._panel?.webview.postMessage(data);
+    }
+    getVersion() {
+        try {
+            const packagePath = path.join(this._extensionUri.fsPath, 'package.json');
+            const fs = require('fs');
+            const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+            return packageJson.version || '0.1.0';
+        }
+        catch (error) {
+            console.error('Failed to read version from package.json:', error);
+            return '0.1.0';
+        }
     }
     getHtmlForWebview() {
         return `<!DOCTYPE html>
@@ -506,7 +525,6 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             padding: 12px;
             border-radius: 8px;
             border-left: 4px solid;
-            white-space: pre-wrap;
             word-wrap: break-word;
         }
 
@@ -569,6 +587,16 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             font-size: 11px;
             opacity: 0.7;
             font-weight: normal;
+        }
+
+        .message-content {
+            white-space: pre-line;
+            line-height: 1.4;
+            margin-top: 0;
+        }
+
+        .message-content:empty {
+            display: none;
         }
 
         .input-container {
@@ -647,7 +675,7 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
                     System
                     <span class="message-timestamp" id="welcomeTime"></span>
                 </div>
-                Welcome to Claude Discord Chat! Start a conversation below.
+                Welcome to Claude Discord Chat v${this.getVersion()}! Start a conversation below.
                 
                 💡 **Quick Start:** Type /config to set up Discord integration, or /help for available commands.
             </div>
