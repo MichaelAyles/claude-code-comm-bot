@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize services
     discordService = new DiscordService();
-    claudeService = new ClaudeService();
+    claudeService = new ClaudeService(context);
     chatProvider = new ChatProvider(context.extensionUri, discordService, claudeService);
 
     // Register commands

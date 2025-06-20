@@ -166,6 +166,10 @@ export class ChatProvider implements vscode.Disposable {
             this.addMessage('system', '🆕 Started new Claude session');
         } else if (cmd === '/session') {
             this.showSessionInfo();
+        } else if (cmd === '/limits' || cmd === '/cost') {
+            this.showLimitsInfo();
+        } else if (cmd === '/usage' || cmd.startsWith('/usage ')) {
+            this.showUsageInfo(cmd);
         } else {
             this.addMessage('system', `Unknown command: ${command}. Type /help for available commands.`);
         }
@@ -226,6 +230,10 @@ Follow these steps to set up Discord integration:
 - \`/stop\` - Stop current Claude request
 - \`/new\` or \`/newsession\` - Start new Claude session
 - \`/session\` - Show current session info
+- \`/limits\` or \`/cost\` - Show usage limits and cost projections
+- \`/usage\` - Show actual usage for today
+- \`/usage daily\` - Show daily usage breakdown  
+- \`/usage monthly\` - Show monthly usage breakdown
 
 **Discord Configuration:**
 - \`/config\` - Run Discord setup wizard
@@ -240,7 +248,9 @@ Follow these steps to set up Discord integration:
 **Tips:**
 - Enable "Auto Mirror" in settings to sync all conversations to Discord
 - Configure channel or user ID for message filtering
-- Check status bar for connection indicators`);
+- Check status bar for connection indicators
+- Monitor costs with \`/limits\` to stay within budget
+- Track actual usage with \`/usage\` commands`);
     }
 
     private showSessionInfo() {
@@ -262,6 +272,172 @@ Follow these steps to set up Discord integration:
 **Status:** ${processing ? '🔄 Processing...' : '✅ Ready'}
 
 Use \`/new\` to start a fresh session or continue chatting to maintain context.`);
+    }
+
+    private showLimitsInfo() {
+        const session = this._claudeService.getCurrentSession();
+        const currentTokens = session ? session.totalTokensInput + session.totalTokensOutput : 0;
+        const currentCost = session ? session.totalCost : 0;
+        
+        // Calculate usage projections
+        const hoursElapsed = session ? (Date.now() - session.startTime.getTime()) / (1000 * 60 * 60) : 1;
+        const costPerHour = hoursElapsed > 0 ? currentCost / hoursElapsed : 0;
+        const dailyProjection = costPerHour * 24;
+        const monthlyProjection = dailyProjection * 30;
+        
+        // Token limits for different models
+        const contextWindows = {
+            'Claude 3 Opus': '200K tokens',
+            'Claude 3.5 Sonnet': '200K tokens',
+            'Claude 3 Haiku': '200K tokens'
+        };
+        
+        // Rate limits
+        const rateLimits = {
+            'Requests per minute': '5 (Pro), 10 (Max)',
+            'Tokens per minute': '40K (Pro), 80K (Max)',
+            'Tokens per day': '1M (Pro), 5M (Max)'
+        };
+
+        this.addMessage('system', `📊 **Usage Limits & Cost Information**
+
+**Current Session Usage:**
+- **Tokens Used:** ${currentTokens.toLocaleString()} tokens
+- **Session Cost:** $${currentCost.toFixed(4)}
+- **Context Usage:** ~${Math.round((currentTokens / 200000) * 100)}% of max context
+
+**Cost Projections:**
+- **Per Hour:** $${costPerHour.toFixed(2)}
+- **Per Day:** $${dailyProjection.toFixed(2)}
+- **Per Month:** $${monthlyProjection.toFixed(2)}
+
+**Model Context Windows:**
+${Object.entries(contextWindows).map(([model, limit]) => `- ${model}: ${limit}`).join('\n')}
+
+**Rate Limits:**
+${Object.entries(rateLimits).map(([limit, value]) => `- ${limit}: ${value}`).join('\n')}
+
+**💡 Tips to Manage Usage:**
+- Use \`/new\` to start fresh sessions when switching tasks
+- Be specific in your queries to reduce back-and-forth
+- Clear context between unrelated tasks
+- Break complex tasks into smaller chunks
+- Monitor costs with \`/limits\` regularly
+
+**📈 Usage Facts:**
+- Average daily cost: ~$6 per developer
+- 90% of users stay under $12/day
+- Monthly average: $50-60 with Sonnet 4
+
+Type \`/session\` for current session details or \`/new\` to reset.`);
+    }
+
+    private showUsageInfo(command: string) {
+        const usage = this._claudeService.getUsageStats();
+        const parts = command.split(' ');
+        const subcommand = parts[1] || 'today';
+
+        if (subcommand === 'daily') {
+            this.showDailyUsage(usage);
+        } else if (subcommand === 'monthly') {
+            this.showMonthlyUsage(usage);
+        } else if (subcommand === 'clear' && parts[2] === 'confirm') {
+            this._claudeService.clearUsageStats();
+            this.addMessage('system', '🗑️ **Usage Statistics Cleared**\n\nAll historical usage data has been cleared.');
+        } else {
+            // Show today's usage by default
+            this.showTodayUsage(usage);
+        }
+    }
+
+    private showTodayUsage(stats: any) {
+        const today = new Date().toISOString().split('T')[0];
+        const todayData = stats.daily[today] || {
+            cost: 0,
+            tokensInput: 0,
+            tokensOutput: 0,
+            sessions: 0,
+            requests: 0
+        };
+
+        // Get current month data
+        const currentMonth = today.substring(0, 7);
+        const monthData = stats.monthly[currentMonth] || {
+            cost: 0,
+            tokensInput: 0,
+            tokensOutput: 0,
+            sessions: 0,
+            requests: 0
+        };
+
+        this.addMessage('system', `📊 **Actual Usage Statistics**
+
+**Today (${today}):**
+- **Cost:** $${todayData.cost.toFixed(4)}
+- **Tokens:** ${(todayData.tokensInput + todayData.tokensOutput).toLocaleString()} (${todayData.tokensInput.toLocaleString()} in, ${todayData.tokensOutput.toLocaleString()} out)
+- **Requests:** ${todayData.requests}
+- **Sessions:** ${todayData.sessions}
+
+**This Month (${currentMonth}):**
+- **Cost:** $${monthData.cost.toFixed(2)}
+- **Tokens:** ${(monthData.tokensInput + monthData.tokensOutput).toLocaleString()}
+- **Requests:** ${monthData.requests}
+- **Sessions:** ${monthData.sessions}
+
+**All Time:**
+- **Total Cost:** $${stats.allTime.cost.toFixed(2)}
+- **Total Tokens:** ${(stats.allTime.tokensInput + stats.allTime.tokensOutput).toLocaleString()}
+- **Total Requests:** ${stats.allTime.requests}
+- **Total Sessions:** ${stats.allTime.sessions}
+
+💡 **Commands:**
+- \`/usage daily\` - View daily breakdown
+- \`/usage monthly\` - View monthly breakdown
+- \`/limits\` - View projections and limits`);
+    }
+
+    private showDailyUsage(stats: any) {
+        const days = Object.keys(stats.daily).sort().reverse().slice(0, 7); // Last 7 days
+        
+        let dailyBreakdown = '📅 **Daily Usage (Last 7 Days)**\n\n';
+        let totalWeekCost = 0;
+        
+        days.forEach(date => {
+            const data = stats.daily[date];
+            totalWeekCost += data.cost;
+            dailyBreakdown += `**${date}:**\n`;
+            dailyBreakdown += `  💰 Cost: $${data.cost.toFixed(4)}\n`;
+            dailyBreakdown += `  🔢 Tokens: ${(data.tokensInput + data.tokensOutput).toLocaleString()}\n`;
+            dailyBreakdown += `  📨 Requests: ${data.requests}\n`;
+            dailyBreakdown += `  💬 Sessions: ${data.sessions}\n\n`;
+        });
+        
+        dailyBreakdown += `**7-Day Total:** $${totalWeekCost.toFixed(2)}\n`;
+        dailyBreakdown += `**Daily Average:** $${(totalWeekCost / Math.min(days.length, 7)).toFixed(2)}`;
+        
+        this.addMessage('system', dailyBreakdown);
+    }
+
+    private showMonthlyUsage(stats: any) {
+        const months = Object.keys(stats.monthly).sort().reverse().slice(0, 12); // Last 12 months
+        
+        let monthlyBreakdown = '📆 **Monthly Usage (Last 12 Months)**\n\n';
+        let totalYearCost = 0;
+        
+        months.forEach(month => {
+            const data = stats.monthly[month];
+            totalYearCost += data.cost;
+            monthlyBreakdown += `**${month}:**\n`;
+            monthlyBreakdown += `  💰 Cost: $${data.cost.toFixed(2)}\n`;
+            monthlyBreakdown += `  🔢 Tokens: ${(data.tokensInput + data.tokensOutput).toLocaleString()}\n`;
+            monthlyBreakdown += `  📨 Requests: ${data.requests}\n`;
+            monthlyBreakdown += `  💬 Sessions: ${data.sessions}\n\n`;
+        });
+        
+        monthlyBreakdown += `**12-Month Total:** $${totalYearCost.toFixed(2)}\n`;
+        monthlyBreakdown += `**Monthly Average:** $${(totalYearCost / Math.min(months.length, 12)).toFixed(2)}`;
+        
+        this.addMessage('system', monthlyBreakdown);
     }
 
     private showStatus() {

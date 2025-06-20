@@ -2,7 +2,7 @@
   "name": "claude-discord-chat",
   "displayName": "Claude Discord Chat",
   "description": "Chat with Claude AI and get Discord notifications for remote monitoring. Seamlessly integrate AI conversations with Discord messaging.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "MichaelAyles",
   "author": "MichaelAyles",
   "license": "MIT",

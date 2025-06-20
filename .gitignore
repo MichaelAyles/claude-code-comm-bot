@@ -98,6 +98,10 @@ public
 tmp/
 temp/
 
+# Build output
+out/
+*.vsix
+
 # Editor directories and files
 .vscode/
 .idea/

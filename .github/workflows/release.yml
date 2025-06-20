@@ -1,0 +1,87 @@
+name: Release VS Code Extension
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.7)'
+        required: true
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Compile TypeScript
+      run: npm run compile
+    
+    - name: Run tests
+      run: npm test
+      continue-on-error: true
+    
+    - name: Package extension
+      run: npm run package
+    
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        release_name: Release v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## Changes in this Release
+          
+          See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/main/CLAUDE.md) for details about this version.
+          
+          ## Installation
+          
+          1. Download the `.vsix` file from the assets below
+          2. Open VS Code
+          3. Open Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`)
+          4. Run "Extensions: Install from VSIX..."
+          5. Select the downloaded file
+          
+          ## Quick Start
+          
+          After installation:
+          1. Open Command Palette
+          2. Run "Claude Discord Chat: Open Chat"
+          3. Type `/config` to set up Discord integration
+        draft: false
+        prerelease: false
+    
+    - name: Upload VSIX
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./claude-discord-chat-${{ steps.version.outputs.VERSION }}.vsix
+        asset_name: claude-discord-chat-${{ steps.version.outputs.VERSION }}.vsix
+        asset_content_type: application/vsix

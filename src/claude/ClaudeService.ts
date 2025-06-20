@@ -17,6 +17,21 @@ export interface ClaudeSession {
     totalTokensOutput: number;
 }
 
+export interface UsageData {
+    date: string; // YYYY-MM-DD format
+    cost: number;
+    tokensInput: number;
+    tokensOutput: number;
+    sessions: number;
+    requests: number;
+}
+
+export interface UsageStats {
+    daily: { [date: string]: UsageData };
+    monthly: { [month: string]: UsageData }; // YYYY-MM format
+    allTime: UsageData;
+}
+
 export class ClaudeService implements vscode.Disposable {
     private _onMessageReceived = new vscode.EventEmitter<ClaudeMessage>();
     private _onSessionChanged = new vscode.EventEmitter<string>();
@@ -32,10 +47,14 @@ export class ClaudeService implements vscode.Disposable {
     private currentProcess: cp.ChildProcess | null = null;
     private isProcessing = false;
     private terminal: vscode.Terminal | null = null;
+    private context: vscode.ExtensionContext;
 
-    constructor() {
+    constructor(context: vscode.ExtensionContext) {
+        this.context = context;
         // Initialize session management
         this.loadLatestSession();
+        // Load usage stats
+        this.loadUsageStats();
     }
 
     public async sendMessage(message: string, addToSession: boolean = true): Promise<void> {
@@ -220,11 +239,28 @@ export class ClaudeService implements vscode.Disposable {
             case 'assistant':
                 if (jsonData.message && jsonData.message.content) {
                     // Track token usage if available
-                    if (jsonData.message.usage) {
+                    if (jsonData.message.usage && this.currentSession) {
+                        const inputTokens = jsonData.message.usage.input_tokens || 0;
+                        const outputTokens = jsonData.message.usage.output_tokens || 0;
+                        
+                        // Update session totals
+                        this.currentSession.totalTokensInput += inputTokens;
+                        this.currentSession.totalTokensOutput += outputTokens;
+                        
+                        // Estimate cost (using Sonnet 3.5 pricing as default)
+                        const inputCost = (inputTokens / 1000000) * 3.00; // $3 per million input tokens
+                        const outputCost = (outputTokens / 1000000) * 15.00; // $15 per million output tokens
+                        const totalCost = inputCost + outputCost;
+                        
+                        this.currentSession.totalCost += totalCost;
+                        
+                        // Update persistent usage stats
+                        this.updateUsageStats(inputTokens, outputTokens, totalCost);
+                        
                         this._onTokensUpdated.fire({
-                            input: jsonData.message.usage.input_tokens || 0,
-                            output: jsonData.message.usage.output_tokens || 0,
-                            cost: 0 // Will be updated in result
+                            input: this.currentSession.totalTokensInput,
+                            output: this.currentSession.totalTokensOutput,
+                            cost: this.currentSession.totalCost
                         });
                     }
 
@@ -317,16 +353,18 @@ export class ClaudeService implements vscode.Disposable {
                     // Update costs and tokens
                     if (this.currentSession) {
                         if (jsonData.total_cost_usd) {
-                            this.currentSession.totalCost += jsonData.total_cost_usd;
+                            // The total_cost_usd is for this request only, not cumulative
+                            // So we don't add it again since we already calculated it from usage
+                            console.log('Request cost from API:', jsonData.total_cost_usd);
                         }
-                        // Token counts will be updated from usage events
+                        
+                        // Update with final totals
+                        this._onTokensUpdated.fire({
+                            input: this.currentSession.totalTokensInput,
+                            output: this.currentSession.totalTokensOutput,
+                            cost: this.currentSession.totalCost
+                        });
                     }
-
-                    this._onTokensUpdated.fire({
-                        input: this.currentSession?.totalTokensInput || 0,
-                        output: this.currentSession?.totalTokensOutput || 0,
-                        cost: jsonData.total_cost_usd || 0
-                    });
 
                     console.log('Request completed:', {
                         cost: jsonData.total_cost_usd,
@@ -392,6 +430,9 @@ export class ClaudeService implements vscode.Disposable {
     }
 
     public newSession(): void {
+        // Increment session count for today
+        this.incrementSessionCount();
+        
         this.currentSession = {
             sessionId: '',
             startTime: new Date(),
@@ -422,6 +463,128 @@ export class ClaudeService implements vscode.Disposable {
     private async loadLatestSession(): Promise<void> {
         // TODO: Implement loading latest session from workspace storage
         console.log('Loading latest session (not implemented yet)');
+    }
+
+    // Usage statistics methods
+    private loadUsageStats(): UsageStats {
+        const stats = this.context.globalState.get<UsageStats>('claudeUsageStats');
+        if (!stats) {
+            return {
+                daily: {},
+                monthly: {},
+                allTime: {
+                    date: '',
+                    cost: 0,
+                    tokensInput: 0,
+                    tokensOutput: 0,
+                    sessions: 0,
+                    requests: 0
+                }
+            };
+        }
+        return stats;
+    }
+
+    private saveUsageStats(stats: UsageStats): void {
+        this.context.globalState.update('claudeUsageStats', stats);
+    }
+
+    private updateUsageStats(inputTokens: number, outputTokens: number, cost: number): void {
+        const stats = this.loadUsageStats();
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const month = today.substring(0, 7); // YYYY-MM
+
+        // Update daily stats
+        if (!stats.daily[today]) {
+            stats.daily[today] = {
+                date: today,
+                cost: 0,
+                tokensInput: 0,
+                tokensOutput: 0,
+                sessions: 0,
+                requests: 0
+            };
+        }
+        stats.daily[today].cost += cost;
+        stats.daily[today].tokensInput += inputTokens;
+        stats.daily[today].tokensOutput += outputTokens;
+        stats.daily[today].requests++;
+
+        // Update monthly stats
+        if (!stats.monthly[month]) {
+            stats.monthly[month] = {
+                date: month,
+                cost: 0,
+                tokensInput: 0,
+                tokensOutput: 0,
+                sessions: 0,
+                requests: 0
+            };
+        }
+        stats.monthly[month].cost += cost;
+        stats.monthly[month].tokensInput += inputTokens;
+        stats.monthly[month].tokensOutput += outputTokens;
+        stats.monthly[month].requests++;
+
+        // Update all-time stats
+        stats.allTime.cost += cost;
+        stats.allTime.tokensInput += inputTokens;
+        stats.allTime.tokensOutput += outputTokens;
+        stats.allTime.requests++;
+
+        // Clean up old daily data (keep last 90 days)
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        const cutoffDate = ninetyDaysAgo.toISOString().split('T')[0];
+        
+        Object.keys(stats.daily).forEach(date => {
+            if (date < cutoffDate) {
+                delete stats.daily[date];
+            }
+        });
+
+        this.saveUsageStats(stats);
+    }
+
+    private incrementSessionCount(): void {
+        const stats = this.loadUsageStats();
+        const today = new Date().toISOString().split('T')[0];
+        const month = today.substring(0, 7);
+
+        if (!stats.daily[today]) {
+            stats.daily[today] = {
+                date: today,
+                cost: 0,
+                tokensInput: 0,
+                tokensOutput: 0,
+                sessions: 0,
+                requests: 0
+            };
+        }
+        stats.daily[today].sessions++;
+
+        if (!stats.monthly[month]) {
+            stats.monthly[month] = {
+                date: month,
+                cost: 0,
+                tokensInput: 0,
+                tokensOutput: 0,
+                sessions: 0,
+                requests: 0
+            };
+        }
+        stats.monthly[month].sessions++;
+        stats.allTime.sessions++;
+
+        this.saveUsageStats(stats);
+    }
+
+    public getUsageStats(): UsageStats {
+        return this.loadUsageStats();
+    }
+
+    public clearUsageStats(): void {
+        this.context.globalState.update('claudeUsageStats', undefined);
     }
 
     public dispose(): void {
