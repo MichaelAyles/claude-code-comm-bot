@@ -20,6 +20,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for changelog generation
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -39,13 +41,42 @@ jobs:
     - name: Package extension
       run: npm run package
     
-    - name: Get version
+    - name: Get version and generate changelog
       id: version
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
         else
           echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+        
+        # Get the previous tag
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        echo "PREV_TAG=${PREV_TAG}" >> $GITHUB_OUTPUT
+        
+        # Generate changelog
+        if [ -n "$PREV_TAG" ]; then
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "### 🎯 Key Changes" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          
+          # Get commit messages since last tag
+          git log --pretty=format:"- %s" ${PREV_TAG}..HEAD | grep -v "Merge" | head -10 >> $GITHUB_OUTPUT
+          
+          echo "" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "### 📊 Statistics" >> $GITHUB_OUTPUT
+          echo "- **Commits**: $(git rev-list --count ${PREV_TAG}..HEAD)" >> $GITHUB_OUTPUT
+          echo "- **Files changed**: $(git diff --stat ${PREV_TAG}..HEAD | tail -1 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "[View full changes](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.VERSION }})" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "### 🚀 Initial Release" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "First release of Claude Discord Chat extension!" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
         fi
     
     - name: Create Release
@@ -55,11 +86,19 @@ jobs:
         tag_name: v${{ steps.version.outputs.VERSION }}
         name: Release v${{ steps.version.outputs.VERSION }}
         body: |
-          ## Changes in this Release
+          ## What's New in v${{ steps.version.outputs.VERSION }}
           
-          See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/main/CLAUDE.md) for details about this version.
+          ${{ steps.version.outputs.CHANGELOG }}
           
-          ## Installation
+          ## 🚀 Features
+          
+          - **Claude AI Integration**: Chat with Claude directly in VS Code
+          - **Discord Mirroring**: Monitor conversations remotely via Discord
+          - **Session Management**: Automatic session persistence and resume
+          - **Command System**: Built-in commands including `/config` setup wizard
+          - **Usage Tracking**: Monitor token usage and cost projections
+          
+          ## 📦 Installation
           
           1. Download the `.vsix` file from the assets below
           2. Open VS Code
@@ -67,12 +106,16 @@ jobs:
           4. Run "Extensions: Install from VSIX..."
           5. Select the downloaded file
           
-          ## Quick Start
+          ## 🚀 Quick Start
           
           After installation:
           1. Open Command Palette
           2. Run "Claude Discord Chat: Open Chat"
           3. Type `/config` to set up Discord integration
+          
+          ## 📚 Documentation
+          
+          For detailed documentation, configuration options, and troubleshooting, see the [README](https://github.com/${{ github.repository }}#readme).
         files: |
           ./claude-discord-chat-${{ steps.version.outputs.VERSION }}.vsix
         draft: false
