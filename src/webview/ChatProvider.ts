@@ -172,163 +172,51 @@ export class ChatProvider implements vscode.Disposable {
     }
 
     private async startConfigurationWizard() {
-        this.addMessage('system', `🔧 **Discord Configuration Wizard**
+        this.addMessage('system', `🔧 **Discord Configuration Guide**
 
-Let me guide you through setting up Discord integration step by step.
+Follow these steps to set up Discord integration:
 
-**Step 1: Discord Bot Setup**
+**Step 1: Create a Discord Bot**
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application or select an existing one
-3. Go to the "Bot" section
-4. Copy your bot token
+2. Click "New Application" and give it a name
+3. Go to the "Bot" section in the left sidebar
+4. Click "Reset Token" and copy the bot token
+5. Enable "Message Content Intent" under "Privileged Gateway Intents"
 
-Once you have your bot token, I'll help you configure it...`);
+**Step 2: Create/Find Your Discord Channel**
+1. Create a new channel in your Discord server (or use an existing one)
+2. Make sure your bot has permission to read and send messages in this channel
 
-        // Request bot token
-        const tokenInput = await vscode.window.showInputBox({
-            prompt: 'Enter your Discord bot token (or press Enter to skip and continue without Discord)',
-            password: true,
-            placeHolder: 'Your bot token from Discord Developer Portal, or leave empty to skip'
-        });
+**Step 3: Enable Developer Mode & Get IDs**
+1. In Discord, go to Settings → Advanced → Enable "Developer Mode"
+2. Right-click on your desired channel → "Copy ID" (this is your Channel ID)
+3. Right-click on your username → "Copy ID" (this is your User ID, optional)
 
-        if (!tokenInput || tokenInput.trim() === '') {
-            this.addMessage('system', '⏭️ Skipped Discord configuration. Extension will work without Discord integration. You can configure Discord later with /config.');
-            return;
-        }
+**Step 4: Configure in VS Code Settings**
+1. Press **Cmd+,** (Mac) or **Ctrl+,** (Windows/Linux) to open VS Code settings
+2. Search for "**discord bot**" in the settings search bar
+3. Configure the following settings:
+   - **Discord Bot Token**: Paste your bot token from Step 1
+   - **Channel ID**: Paste your channel ID from Step 3 (optional - leave empty to listen to all channels)
+   - **User ID**: Paste your user ID from Step 3 (optional - leave empty to listen to all users)
+   - **Enabled**: Check this box to enable Discord integration
+   - **Auto Mirror**: Check this box to automatically send Claude conversations to Discord
 
-        // Save bot token
-        const config = vscode.workspace.getConfiguration('claude-discord-chat.discord');
-        await config.update('botToken', tokenInput, vscode.ConfigurationTarget.Global);
-        await config.update('enabled', true, vscode.ConfigurationTarget.Global);
-
-        this.addMessage('system', `✅ Bot token saved!
-
-**Step 2: Choose Message Filtering**
-You can configure the bot to:
-- **Option A**: Listen to a specific Discord channel
-- **Option B**: Only respond to your direct messages
-- **Option C**: Listen to all messages (not recommended for production)
-
-Which would you prefer?`);
-
-        const filterChoice = await vscode.window.showQuickPick([
-            { label: 'Specific Channel', description: 'Listen only to messages in one Discord channel', value: 'channel' },
-            { label: 'Direct Messages Only', description: 'Only respond to DMs from you', value: 'user' },
-            { label: 'All Messages', description: 'Listen to all messages (testing only)', value: 'all' }
-        ], {
-            placeHolder: 'Choose how to filter Discord messages'
-        });
-
-        if (!filterChoice) {
-            this.addMessage('system', '⏭️ Skipping message filtering setup. Your bot token is saved. You can complete setup later with /config.');
-            return;
-        }
-
-        if (filterChoice.value === 'channel') {
-            await this.configureChannelId();
-        } else if (filterChoice.value === 'user') {
-            await this.configureUserId();
-        } else {
-            // Clear both IDs for all messages
-            await config.update('channelId', '', vscode.ConfigurationTarget.Global);
-            await config.update('userId', '', vscode.ConfigurationTarget.Global);
-            this.addMessage('system', '⚠️ **All Messages Mode**: Bot will listen to all Discord messages. This is recommended for testing only!');
-        }
-
-        // Test connection
-        this.addMessage('system', `🔌 **Testing Discord connection...**`);
-
-        try {
-            await this._discordService.connect();
-            this.addMessage('system', `🎉 **Configuration Complete!**
-
-✅ Discord bot connected successfully
-✅ Message filtering configured
-✅ Auto-mirroring enabled
-
-**Next Steps:**
-1. Invite your bot to your Discord server with proper permissions:
+**Step 5: Invite Your Bot to Your Server**
+1. In the Discord Developer Portal, go to OAuth2 → URL Generator
+2. Select "bot" scope and these permissions:
    - Send Messages
    - Read Message History
    - View Channel
-2. Test by sending a message in your configured channel/DM
-3. Type /status to check connection details
+3. Copy the generated URL and open it in your browser
+4. Select your server and authorize the bot
 
-**Quick Commands:**
-- \`/help\` - Show available commands
-- \`/status\` - Show connection status
-- \`/config\` - Re-run this setup wizard`);
+**That's it!** Your Discord bot should now be connected. Use **/status** to check the connection status.
 
-        } catch (error) {
-            this.addMessage('error', `❌ **Connection Failed**: ${error}
-
-Please check:
-1. Bot token is correct
-2. Bot has proper permissions (Message Content Intent enabled)
-3. Bot is invited to your server
-
-You can re-run /config to try again.`);
-        }
-    }
-
-    private async configureChannelId() {
-        this.addMessage('system', `📋 **Channel Configuration**
-
-To get your Discord channel ID:
-1. Enable Developer Mode in Discord (Settings → Advanced → Developer Mode)
-2. Right-click on your desired channel
-3. Click "Copy ID"
-4. Paste it here
-
-**Note**: Make sure your bot has permission to view and send messages in this channel!`);
-
-        const channelId = await vscode.window.showInputBox({
-            prompt: 'Enter Discord Channel ID (or press Enter to skip)',
-            placeHolder: 'Right-click channel → Copy ID, or leave empty to skip',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') return null; // Allow empty
-                if (!/^\d+$/.test(value)) return 'Channel ID should only contain numbers';
-                if (value.length < 17 || value.length > 20) return 'Channel ID should be 17-20 digits';
-                return null;
-            }
-        });
-
-        if (channelId) {
-            const config = vscode.workspace.getConfiguration('claude-discord-chat.discord');
-            await config.update('channelId', channelId, vscode.ConfigurationTarget.Global);
-            await config.update('userId', '', vscode.ConfigurationTarget.Global); // Clear user ID
-            this.addMessage('system', `✅ Channel ID configured: ${channelId}`);
-        }
-    }
-
-    private async configureUserId() {
-        this.addMessage('system', `👤 **User Configuration**
-
-To get your Discord user ID:
-1. Enable Developer Mode in Discord (Settings → Advanced → Developer Mode)
-2. Right-click on your username/avatar
-3. Click "Copy ID"
-4. Paste it here
-
-**Note**: The bot will only respond to direct messages from this user ID.`);
-
-        const userId = await vscode.window.showInputBox({
-            prompt: 'Enter your Discord User ID (or press Enter to skip)',
-            placeHolder: 'Right-click your username → Copy ID, or leave empty to skip',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') return null; // Allow empty
-                if (!/^\d+$/.test(value)) return 'User ID should only contain numbers';
-                if (value.length < 17 || value.length > 20) return 'User ID should be 17-20 digits';
-                return null;
-            }
-        });
-
-        if (userId) {
-            const config = vscode.workspace.getConfiguration('claude-discord-chat.discord');
-            await config.update('userId', userId, vscode.ConfigurationTarget.Global);
-            await config.update('channelId', '', vscode.ConfigurationTarget.Global); // Clear channel ID
-            this.addMessage('system', `✅ User ID configured: ${userId}`);
-        }
+**Pro Tips:**
+- Leave Channel ID empty to listen to all channels where the bot has permissions
+- Leave User ID empty to respond to messages from any user
+- Use **/status** to verify your configuration is working`);
     }
 
     private showHelp() {

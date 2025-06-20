@@ -2,7 +2,7 @@
   "name": "claude-discord-chat",
   "displayName": "Claude Discord Chat",
   "description": "Chat with Claude and get Discord notifications for remote monitoring",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "MichaelAyles",
   "author": "MichaelAyles",
   "license": "MIT",
