@@ -1,0 +1,15 @@
+.vscode/**
+.vscode-test/**
+out/test/**
+src/**
+.gitignore
+.env
+.env.example
+tsconfig.json
+.eslintrc.json
+node_modules/**
+npm-debug.log
+*.vsix
+.claude/**
+**/*.map
+.DS_Store

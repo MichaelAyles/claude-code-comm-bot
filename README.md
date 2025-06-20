@@ -1,54 +1,82 @@
-# Claude Code Discord MCP Server
+# Claude Discord Chat - VS Code Extension
 
-An MCP server that enables Claude Code to communicate with you through Discord, allowing you to receive updates and send commands to your coding sessions remotely.
+A VS Code extension that provides a beautiful chat interface for Claude AI with Discord integration for remote monitoring and control.
+
+## Project Inspiration
+
+This project was inspired by the excellent [claude-code-chat](https://github.com/andrepimenta/claude-code-chat) VS Code extension by Andre Pimenta. However, due to the restrictive license of that project (which allows viewing for educational purposes only but prohibits modification, distribution, or creation of derivative works), we have implemented our own original solution from scratch.
+
+Our implementation takes inspiration from the concepts and approaches demonstrated in the original project but contains no copied code. We studied how VS Code extensions can provide beautiful chat interfaces and integrated that knowledge into our Discord-based MCP server architecture. This allows us to provide similar functionality while maintaining full compatibility with the MIT license and enabling community contributions.
 
 ## Features
 
-- 📱 **Discord Integration**: Send messages and receive responses through Discord
-- 🔄 **Real-time Communication**: Bidirectional communication with Claude Code
-- ⚙️ **Configurable**: Easy setup with environment variables
-- 🛡️ **Secure**: Token-based authentication
-- 📝 **Message History**: Track recent Discord interactions
+- 💬 **Beautiful Chat Interface**: Clean, VS Code-native chat UI
+- 📱 **Discord Integration**: Mirror conversations to Discord for remote monitoring
+- 🔄 **Real-time Communication**: Bidirectional Discord messaging
+- ⚙️ **Easy Configuration**: Simple VS Code settings integration
+- 🛡️ **Secure**: Discord bot token-based authentication
+- 📊 **Status Indicators**: Visual connection status in VS Code status bar
+- 🎯 **Remote Control**: Send messages to Discord directly from the chat
+- ⚡ **Instant Setup**: Ready to use with minimal configuration
+
+## Our Approach: Discord as a Universal Interface
+
+Instead of being limited to VS Code, our solution provides Discord as a universal interface that works with Claude Code anywhere:
+
+### Benefits of Our Approach
+- **Platform Independent**: Works with Claude Code CLI, VS Code, or any other environment
+- **Mobile Friendly**: Monitor and control Claude sessions from your phone via Discord
+- **Team Collaboration**: Share Claude interactions with team members in Discord channels
+- **Always Available**: No need to be at your computer to monitor progress
+- **Rich Notifications**: Discord's notification system keeps you informed
+- **Voice Integration**: Use Discord's voice features for hands-free interaction
+
+### Architecture Overview
+```
+Claude Code ←→ MCP Server ←→ Discord Bot ←→ Discord App/Web/Mobile
+```
+
+This design allows for:
+1. **Seamless Integration**: Claude Code treats it like any other MCP server
+2. **Real-time Updates**: Instant notifications of progress, errors, or completion
+3. **Remote Control**: Send commands and receive responses from anywhere
+4. **Intelligent Processing**: Context-aware responses to Discord messages
+5. **Approval Workflows**: Handle permission requests through Discord
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ 
-- A Discord bot token
-- Discord channel ID or user ID for messaging
+- VS Code 1.95.0 or higher
+- Node.js 18+ (for development)
+- A Discord bot token (optional, for Discord integration)
 
 ### Installation
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/claude-code-discord-mcp.git
-cd claude-code-discord-mcp
+git clone https://github.com/tribune/claude-discord-chat.git
+cd claude-discord-chat
 npm install
+npm run compile
 ```
 
-2. Create a `.env` file:
-```bash
-cp .env.example .env
-```
+2. Install the extension:
+   ```bash
+   npm run package
+   ```
+   - In Cursor/VS Code, press `Cmd+Shift+P` (or `Ctrl+Shift+P`)
+   - Run "Extensions: Install from VSIX..."
+   - Select the generated `claude-discord-chat-0.1.0.vsix` file
 
-3. Configure your Discord bot in `.env`:
-```env
-# Discord Bot Configuration
-DISCORD_BOT_TOKEN=your_discord_bot_token_here
+3. Configure Discord (optional):
+   - Open VS Code Settings (`Ctrl+,` or `Cmd+,`)
+   - Search for "Claude Discord Chat"
+   - Set your Discord bot token and channel/user IDs
 
-# Use either channel ID (for server channels) or user ID (for DMs)
-DISCORD_CHANNEL_ID=your_discord_channel_id_here
-# OR
-DISCORD_USER_ID=your_discord_user_id_here
-
-LOG_LEVEL=info
-```
-
-4. Start the MCP server:
-```bash
-npm start
-```
+4. Start chatting:
+   - Press `Ctrl+Shift+C` (or `Cmd+Shift+C` on Mac)
+   - Or run "Claude Discord Chat: Open Claude Chat" from Command Palette
 
 ### Development Scripts
 
@@ -245,6 +273,29 @@ LOG_LEVEL=debug npm start
 ## Contributing
 
 Feel free to submit issues and enhancement requests!
+
+## Future Enhancements
+
+Our Discord-based approach opens up many possibilities for enhanced features:
+
+### Planned Features
+- **Discord Slash Commands**: `/claude status`, `/claude deploy`, etc.
+- **Rich Embeds**: Beautiful formatted messages with syntax highlighting
+- **File Attachments**: Send code files directly through Discord
+- **Voice Commands**: "Hey Claude, run the tests" 
+- **Team Channels**: Dedicated channels for different projects
+- **Bot Dashboard**: Web interface for advanced configuration
+- **Integration Webhooks**: Connect with GitHub, CI/CD, etc.
+
+### VS Code Extension Alternative
+While we can't modify the existing extension, we could create our own original VS Code extension that:
+- Connects to our Discord MCP server
+- Provides a chat interface using VS Code's webview API
+- Implements file referencing and syntax highlighting
+- Offers conversation history and session management
+- All with original code under MIT license
+
+This would combine the best of both worlds: the beautiful VS Code interface experience with our powerful Discord remote capabilities.
 
 ## License
 

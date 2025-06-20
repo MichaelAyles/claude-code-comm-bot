@@ -1,24 +1,111 @@
 {
-  "name": "claude-code-discord-mcp",
-  "version": "1.0.0",
-  "description": "MCP server for Claude Code that integrates with Discord bot for messaging",
-  "main": "src/index.js",
-  "type": "module",
-  "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "echo \"No tests specified\" && exit 0",
-    "test-discord": "node test-discord.js"
-  },
-  "keywords": ["mcp", "claude-code", "discord", "bot"],
-  "author": "",
+  "name": "claude-discord-chat",
+  "displayName": "Claude Discord Chat",
+  "description": "Chat with Claude and get Discord notifications for remote monitoring",
+  "version": "0.1.0",
+  "publisher": "tribune",
+  "author": "Tribune",
   "license": "MIT",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.4.0",
-    "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tribune/claude-discord-chat"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other",
+    "AI",
+    "Chat",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "claude",
+    "ai",
+    "chat",
+    "discord",
+    "assistant",
+    "anthropic"
+  ],
+  "icon": "icon.png",
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claude-discord-chat.openChat",
+        "title": "Open Claude Chat",
+        "category": "Claude Discord Chat"
+      },
+      {
+        "command": "claude-discord-chat.connectDiscord",
+        "title": "Connect Discord",
+        "category": "Claude Discord Chat"
+      },
+      {
+        "command": "claude-discord-chat.disconnectDiscord",
+        "title": "Disconnect Discord",
+        "category": "Claude Discord Chat"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claude-discord-chat.openChat",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Discord Chat",
+      "properties": {
+        "claude-discord-chat.discord.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Discord integration"
+        },
+        "claude-discord-chat.discord.botToken": {
+          "type": "string",
+          "default": "",
+          "description": "Discord bot token (keep secret!)"
+        },
+        "claude-discord-chat.discord.channelId": {
+          "type": "string",
+          "default": "",
+          "description": "Discord channel ID for messages"
+        },
+        "claude-discord-chat.discord.userId": {
+          "type": "string",
+          "default": "",
+          "description": "Discord user ID for DMs (optional)"
+        },
+        "claude-discord-chat.discord.autoMirror": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically mirror chat to Discord"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.8.0",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.0",
+    "@vscode/vsce": "^2.24.0"
   }
 }
