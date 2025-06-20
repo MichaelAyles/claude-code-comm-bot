@@ -30,6 +30,17 @@ export class ChatProvider implements vscode.Disposable {
         this._claudeService.onMessageReceived((message: ClaudeMessage) => {
             console.log('ChatProvider received Claude message:', message);
             this.addMessage(message.type, message.content);
+            
+            // Auto-mirror Claude responses to Discord if enabled
+            const config = vscode.workspace.getConfiguration('claude-discord-chat.discord');
+            if (config.get<boolean>('autoMirror') && this._discordService.isConnected()) {
+                // Only mirror main responses, not thinking or tool use details
+                if (message.type === 'assistant') {
+                    this._discordService.sendMessage(`Claude: ${message.content}`).catch(console.error);
+                } else if (message.type === 'error') {
+                    this._discordService.sendMessage(`Claude (Error): ${message.content}`).catch(console.error);
+                }
+            }
         });
 
         // Listen for Claude processing state changes
@@ -126,8 +137,7 @@ export class ChatProvider implements vscode.Disposable {
         // Auto-mirror to Discord if enabled
         const config = vscode.workspace.getConfiguration('claude-discord-chat.discord');
         if (config.get<boolean>('autoMirror') && this._discordService.isConnected()) {
-            const timestamp = new Date().toLocaleTimeString();
-            this._discordService.sendMessage(`[${timestamp}] ${content}`).catch(console.error);
+            this._discordService.sendMessage(`User: ${content}`).catch(console.error);
         }
 
         // Send message to Claude
@@ -173,13 +183,13 @@ Once you have your bot token, I'll help you configure it...`);
 
         // Request bot token
         const tokenInput = await vscode.window.showInputBox({
-            prompt: 'Enter your Discord bot token',
+            prompt: 'Enter your Discord bot token (or press Enter to skip and continue without Discord)',
             password: true,
-            placeHolder: 'Your bot token from Discord Developer Portal'
+            placeHolder: 'Your bot token from Discord Developer Portal, or leave empty to skip'
         });
 
-        if (!tokenInput) {
-            this.addMessage('system', '❌ Configuration cancelled. You can restart with /config anytime.');
+        if (!tokenInput || tokenInput.trim() === '') {
+            this.addMessage('system', '⏭️ Skipped Discord configuration. Extension will work without Discord integration. You can configure Discord later with /config.');
             return;
         }
 
@@ -207,7 +217,7 @@ Which would you prefer?`);
         });
 
         if (!filterChoice) {
-            this.addMessage('system', '❌ Configuration cancelled. Your bot token is saved, but message filtering is not configured.');
+            this.addMessage('system', '⏭️ Skipping message filtering setup. Your bot token is saved. You can complete setup later with /config.');
             return;
         }
 
@@ -270,10 +280,10 @@ To get your Discord channel ID:
 **Note**: Make sure your bot has permission to view and send messages in this channel!`);
 
         const channelId = await vscode.window.showInputBox({
-            prompt: 'Enter Discord Channel ID',
-            placeHolder: 'Right-click channel → Copy ID',
+            prompt: 'Enter Discord Channel ID (or press Enter to skip)',
+            placeHolder: 'Right-click channel → Copy ID, or leave empty to skip',
             validateInput: (value) => {
-                if (!value) return 'Channel ID is required';
+                if (!value || value.trim() === '') return null; // Allow empty
                 if (!/^\d+$/.test(value)) return 'Channel ID should only contain numbers';
                 if (value.length < 17 || value.length > 20) return 'Channel ID should be 17-20 digits';
                 return null;
@@ -300,10 +310,10 @@ To get your Discord user ID:
 **Note**: The bot will only respond to direct messages from this user ID.`);
 
         const userId = await vscode.window.showInputBox({
-            prompt: 'Enter your Discord User ID',
-            placeHolder: 'Right-click your username → Copy ID',
+            prompt: 'Enter your Discord User ID (or press Enter to skip)',
+            placeHolder: 'Right-click your username → Copy ID, or leave empty to skip',
             validateInput: (value) => {
-                if (!value) return 'User ID is required';
+                if (!value || value.trim() === '') return null; // Allow empty
                 if (!/^\d+$/.test(value)) return 'User ID should only contain numbers';
                 if (value.length < 17 || value.length > 20) return 'User ID should be 17-20 digits';
                 return null;
@@ -452,7 +462,12 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             font-weight: 600;
         }
 
-        .discord-status {
+        .status-indicators {
+            display: flex;
+            gap: 12px;
+        }
+
+        .claude-status, .discord-status {
             padding: 4px 12px;
             border-radius: 4px;
             font-size: 12px;
@@ -462,16 +477,28 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             gap: 6px;
         }
 
-        .discord-status.connected {
+        .claude-status.connected {
             background-color: rgba(46, 204, 113, 0.1);
             color: #2ecc71;
             border: 1px solid rgba(46, 204, 113, 0.3);
         }
 
-        .discord-status.disconnected {
+        .claude-status.disconnected {
             background-color: rgba(231, 76, 60, 0.1);
             color: #e74c3c;
             border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+
+        .discord-status.connected {
+            background-color: rgba(100, 149, 237, 0.1);
+            color: #6495ed;
+            border: 1px solid rgba(100, 149, 237, 0.3);
+        }
+
+        .discord-status.disconnected {
+            background-color: rgba(128, 128, 128, 0.1);
+            color: #808080;
+            border: 1px solid rgba(128, 128, 128, 0.3);
         }
 
         .chat-container {
@@ -493,6 +520,8 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             padding: 12px;
             border-radius: 8px;
             border-left: 4px solid;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         .message.user {
@@ -628,9 +657,15 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
 <body>
     <div class="header">
         <h2>Claude Discord Chat</h2>
-        <div id="discordStatus" class="discord-status disconnected">
-            <span>●</span>
-            <span>Discord Disconnected</span>
+        <div class="status-indicators">
+            <div id="claudeStatus" class="claude-status connected">
+                <span>●</span>
+                <span>Claude Ready</span>
+            </div>
+            <div id="discordStatus" class="discord-status disconnected">
+                <span>●</span>
+                <span>Discord Disconnected</span>
+            </div>
         </div>
     </div>
     
@@ -669,6 +704,7 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
         const sendDiscordBtn = document.getElementById('sendDiscordBtn');
         const sendUrgentBtn = document.getElementById('sendUrgentBtn');
         const discordStatus = document.getElementById('discordStatus');
+        const claudeStatus = document.getElementById('claudeStatus');
 
         // Set welcome timestamp
         document.getElementById('welcomeTime').textContent = new Date().toLocaleTimeString();
@@ -715,13 +751,17 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
                     break;
             }
             
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = content; // Use textContent to preserve formatting and prevent XSS
+            
             messageDiv.innerHTML = \`
                 <div class="message-header">
                     \${icon} \${typeLabel}
                     <span class="message-timestamp">\${timestamp}</span>
                 </div>
-                \${content}
             \`;
+            messageDiv.appendChild(messageContent);
             
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -793,10 +833,14 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
                         inputField.disabled = true;
                         sendBtn.disabled = true;
                         sendBtn.textContent = 'Processing...';
+                        claudeStatus.className = 'claude-status connected';
+                        claudeStatus.innerHTML = '<span>●</span><span>Claude Processing...</span>';
                     } else {
                         inputField.disabled = false;
                         sendBtn.disabled = false;
                         sendBtn.textContent = 'Send';
+                        claudeStatus.className = 'claude-status connected';
+                        claudeStatus.innerHTML = '<span>●</span><span>Claude Ready</span>';
                     }
                     break;
                     

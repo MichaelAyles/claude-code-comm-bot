@@ -120,19 +120,14 @@ export class ClaudeService implements vscode.Disposable {
             }
         });
 
-        // Also run the same command in terminal for live output
-        this.terminal.sendText(fullCommand);
-
-        // Send message to Claude's stdin
+        // Send message to Claude's stdin (background process for JSON parsing)
         if (this.currentProcess.stdin) {
             this.currentProcess.stdin.write(message + '\n');
             this.currentProcess.stdin.end();
-            
-            // Also send message to terminal
-            setTimeout(() => {
-                this.terminal?.sendText(message);
-            }, 500);
         }
+
+        // Run interactive command in terminal for live output (this will prompt for input)
+        this.terminal.sendText(fullCommand);
 
         let rawOutput = '';
         let errorOutput = '';
