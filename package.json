@@ -109,7 +109,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test",
-    "package": "vsce package"
+    "package": "npx vsce package"
   },
   "dependencies": {
     "discord.js": "^14.14.1"

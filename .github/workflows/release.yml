@@ -31,7 +31,7 @@ jobs:
       run: npm run compile
     
     - name: Run tests
-      run: npm test
+      run: xvfb-run -a npm test
       continue-on-error: true
     
     - name: Package extension
@@ -48,12 +48,10 @@ jobs:
     
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.version.outputs.VERSION }}
-        release_name: Release v${{ steps.version.outputs.VERSION }}
+        name: Release v${{ steps.version.outputs.VERSION }}
         body: |
           ## Changes in this Release
           
@@ -73,15 +71,9 @@ jobs:
           1. Open Command Palette
           2. Run "Claude Discord Chat: Open Chat"
           3. Type `/config` to set up Discord integration
+        files: |
+          ./claude-discord-chat-${{ steps.version.outputs.VERSION }}.vsix
         draft: false
         prerelease: false
-    
-    - name: Upload VSIX
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./claude-discord-chat-${{ steps.version.outputs.VERSION }}.vsix
-        asset_name: claude-discord-chat-${{ steps.version.outputs.VERSION }}.vsix
-        asset_content_type: application/vsix
