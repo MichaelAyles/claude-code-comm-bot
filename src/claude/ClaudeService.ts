@@ -38,7 +38,7 @@ export class ClaudeService implements vscode.Disposable {
         this.loadLatestSession();
     }
 
-    public async sendMessage(message: string): Promise<void> {
+    public async sendMessage(message: string, addToSession: boolean = true): Promise<void> {
         if (this.isProcessing) {
             throw new Error('Claude is already processing a message');
         }
@@ -46,12 +46,14 @@ export class ClaudeService implements vscode.Disposable {
         try {
             this.setProcessing(true);
             
-            // Add user message to session
-            this.addMessageToSession({
-                type: 'user',
-                content: message,
-                timestamp: new Date()
-            });
+            // Add user message to session only if requested
+            if (addToSession) {
+                this.addMessageToSession({
+                    type: 'user',
+                    content: message,
+                    timestamp: new Date()
+                });
+            }
 
             await this.executeClaudeCommand(message);
         } catch (error) {

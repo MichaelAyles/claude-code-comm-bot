@@ -50,6 +50,10 @@ class ChatProvider {
         this._discordService.onMessageReceived((message) => {
             console.log('ChatProvider received Discord message:', message);
             this.addMessage('discord', `**${message.author.username}**: ${message.content}`);
+            // Forward Discord message to Claude without adding duplicate user message
+            this._claudeService.sendMessage(message.content, false).catch((error) => {
+                this.addMessage('error', `Failed to send Discord message to Claude: ${error}`);
+            });
         });
         // Listen for Discord status changes
         this._discordService.onStatusChange((connected) => {
@@ -113,9 +117,6 @@ class ChatProvider {
             switch (message.type) {
                 case 'sendMessage':
                     this.handleSendMessage(message.content);
-                    break;
-                case 'sendToDiscord':
-                    this.handleSendToDiscord(message.content, message.urgent);
                     break;
             }
         }, null, this._disposables);
@@ -396,15 +397,6 @@ Use \`/new\` to start a fresh session or continue chatting to maintain context.`
 ${!enabled || !hasToken ? '\n⚠️ Run `/config` to set up Discord integration' : ''}
 ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot token and permissions' : ''}`);
     }
-    async handleSendToDiscord(content, urgent = false) {
-        try {
-            await this._discordService.sendMessage(content, urgent);
-            this.addMessage('system', `Message sent to Discord${urgent ? ' (urgent)' : ''}`);
-        }
-        catch (error) {
-            this.addMessage('error', `Failed to send to Discord: ${error}`);
-        }
-    }
     addMessage(type, content) {
         const message = {
             type,
@@ -631,21 +623,6 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             background-color: var(--vscode-list-hoverBackground);
         }
 
-        .btn-urgent {
-            background-color: rgba(231, 76, 60, 0.1);
-            color: #e74c3c;
-            border-color: rgba(231, 76, 60, 0.3);
-        }
-
-        .btn-urgent:hover {
-            background-color: rgba(231, 76, 60, 0.2);
-        }
-
-        .discord-controls {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
     </style>
 </head>
 <body>
@@ -681,11 +658,6 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
                 <input type="text" id="messageInput" class="input-field" placeholder="Type your message..." />
                 <button id="sendBtn" class="btn btn-primary">Send</button>
             </div>
-            <div class="discord-controls">
-                <input type="text" id="discordInput" class="input-field" placeholder="Send message to Discord..." />
-                <button id="sendDiscordBtn" class="btn btn-secondary">Send to Discord</button>
-                <button id="sendUrgentBtn" class="btn btn-urgent">Send Urgent</button>
-            </div>
         </div>
     </div>
 
@@ -693,10 +665,7 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
         const vscode = acquireVsCodeApi();
         const messagesContainer = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
-        const discordInput = document.getElementById('discordInput');
         const sendBtn = document.getElementById('sendBtn');
-        const sendDiscordBtn = document.getElementById('sendDiscordBtn');
-        const sendUrgentBtn = document.getElementById('sendUrgentBtn');
         const discordStatus = document.getElementById('discordStatus');
         const claudeStatus = document.getElementById('claudeStatus');
 
@@ -772,31 +741,11 @@ ${enabled && hasToken && !connected ? '\n⚠️ Connection issue - check bot tok
             }
         }
 
-        function sendToDiscord(urgent = false) {
-            const content = discordInput.value.trim();
-            if (content) {
-                vscode.postMessage({
-                    type: 'sendToDiscord',
-                    content: content,
-                    urgent: urgent
-                });
-                discordInput.value = '';
-            }
-        }
-
         sendBtn.addEventListener('click', sendMessage);
-        sendDiscordBtn.addEventListener('click', () => sendToDiscord(false));
-        sendUrgentBtn.addEventListener('click', () => sendToDiscord(true));
 
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 sendMessage();
-            }
-        });
-
-        discordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendToDiscord(e.shiftKey);
             }
         });
 

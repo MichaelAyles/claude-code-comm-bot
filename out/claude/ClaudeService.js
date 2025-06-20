@@ -53,18 +53,20 @@ class ClaudeService {
         // Initialize session management
         this.loadLatestSession();
     }
-    async sendMessage(message) {
+    async sendMessage(message, addToSession = true) {
         if (this.isProcessing) {
             throw new Error('Claude is already processing a message');
         }
         try {
             this.setProcessing(true);
-            // Add user message to session
-            this.addMessageToSession({
-                type: 'user',
-                content: message,
-                timestamp: new Date()
-            });
+            // Add user message to session only if requested
+            if (addToSession) {
+                this.addMessageToSession({
+                    type: 'user',
+                    content: message,
+                    timestamp: new Date()
+                });
+            }
             await this.executeClaudeCommand(message);
         }
         catch (error) {
