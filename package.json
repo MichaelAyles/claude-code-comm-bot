@@ -1,23 +1,27 @@
 {
   "name": "claude-discord-chat",
   "displayName": "Claude Discord Chat",
-  "description": "Chat with Claude and get Discord notifications for remote monitoring",
-  "version": "0.1.2",
+  "description": "Chat with Claude AI and get Discord notifications for remote monitoring. Seamlessly integrate AI conversations with Discord messaging.",
+  "version": "0.1.3",
   "publisher": "MichaelAyles",
   "author": "MichaelAyles",
   "license": "MIT",
+  "homepage": "https://github.com/MichaelAyles/claude-code-comm-bot#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tribune/claude-discord-chat"
+    "url": "https://github.com/MichaelAyles/claude-code-comm-bot"
+  },
+  "bugs": {
+    "url": "https://github.com/MichaelAyles/claude-code-comm-bot/issues"
   },
   "engines": {
     "vscode": "^1.95.0"
   },
   "categories": [
-    "Other",
     "AI",
     "Chat",
-    "Machine Learning"
+    "Machine Learning",
+    "Other"
   ],
   "keywords": [
     "claude",
@@ -25,8 +29,18 @@
     "chat",
     "discord",
     "assistant",
-    "anthropic"
+    "anthropic",
+    "chatbot",
+    "integration",
+    "notifications",
+    "remote",
+    "monitoring",
+    "messaging"
   ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "icon": "icon.png",
   "main": "./out/extension.js",
   "activationEvents": [
